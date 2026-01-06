@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#00A3E0" # Pfizer-ish Blue or a nice Teal
+backgroundColor="#0E1117" # Dark Mode
+secondaryBackgroundColor="#262730"
+textColor="#FAFAFA"
+font="sans serif"
