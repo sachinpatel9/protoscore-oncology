@@ -1,52 +1,69 @@
-# ProtoScore Oncology: Clinical Trial Feasibility Engine (update needed)
+# ProtoScore Oncology: Clinical Trial Feasibility Engine
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B)
-![Status](https://img.shields.io/badge/Status-MVP_Live-success)
+![Gradio](https://img.shields.io/badge/Gradio-1.30%2B-FF4B4B)
+![FastAPI](https://img.shields.io/badge/FastAPI-red)
+![Pandas](https://img.shields.io/badge/Pandas-yellow)
+![Orchestration](https://img.shields.io/badge/LangChain_and_LiteLLM-indigoblue)
+![Status](https://img.shields.io/badge/Status-MVP_Live-Local-blue)
 ![Focus](https://img.shields.io/badge/Domain-Oncology_Clinical_Ops-teal)
 
-**ProtoScore** is a decision-support microservice that quantifies the operational complexity of oncology clinical trials. It empowers Clinical Operations teams to simulate protocol changes and evaluate site feasibility *before* a study is finalized.
+## The Cognitive Feasibility Engine
+
+ProtoScore Oncology is an AI-powered clinical trial analyst designed to quantify the operational complexity of oncology protocols. By evolving from a simple calculator to an autonomous agentic system, ProtoScore demystifies the clinical trial decision-making process, replacing "gut-feelings" with evidence-based quantification of patient and site burden.
 
 ---
 
-## The Clinical Problem
+### The Clinical Problem
 
-Modern oncology protocols have reached a complexity tipping point. The drive for deeper scientific data has resulted in protocols with 40+ Inclusion/Exclusion criteria and dense Schedule of Assessment (SoA) tables. 
+Clinical trial design is currently a high-stakes, manual process. In industry settings, feasibility decisions are often made by medical directors based on subjective experience rather than empirical data.  This lack of quantification leads to significant operational risks: 
 
-**The Business Impact:**
-* **25%** of oncology trials fail to enroll their target populations due to restrictive criteria.
-* Sites are burning out from excessive data-entry burdens.
-* Clinical Ops lacks the quantitative data needed to negotiate operationally friendly designs with Medical Directors.
+* Table Blindness: Standard RAG architectures struggle to parse the Schedule of Assessment (SoA) tables where the highest operational costs are hidden. 
+* Linear Misinterpretation: A "biopsy" listed in eligibility criteria carries a different operational weight than a mandatory "biopsy" in a treatment cycle; standard tools treat these as identical text strings. 
+* Informative Censoring: Onerous protocol designs lead to early patient withdrawal, introducing statistical bias that can invalidate survival analyses. 
 
-## The Solution
+### The Solution
 
-ProtoScore bridges the "Feasibility Gap." It shifts the paradigm from subjective protocol review to quantitative simulation. 
+ProtoScore V2 shifts the paradigm from subjective review to Quantitative Simulation. It acts as an Analyst that reads raw protocol PDFs, recognizes the structural nuances of clinical documents, and extracts metrics autonomously to calculate a Protocol Complexity Score (PCS).
 
-By ingesting key protocol metrics, ProtoScore calculates a **Protocol Complexity Score (PCS)** (0-100) based on three core pillars:
-1. **Design Complexity:** Density of I/E criteria and study endpoints.
-2. **Patient Burden:** Frequency of site visits and invasive procedures (e.g., biopsies).
-3. **Site Burden:** Estimated staff hours per patient and CRF data volume.
-
----
-
-## Architecture & Philosophy (Safety First)
-
-
-
-In healthcare software, decision-support tools must be auditable and safe. 
-
-**ProtoScore V1 deliberately avoids using Large Language Models (LLMs) for the scoring calculation.** Instead, the core engine relies on a **deterministic, weighted linear model** built with `NumPy` and `Pandas`. 
-
-* **The Interface (Streamlit):** A reactive "Human-in-the-Loop" dashboard allowing users to toggle parameters (e.g., reducing required biopsies) to instantly simulate the impact on patient burden.
-* **The Engine (Stateless API):** The scoring logic is completely decoupled from the UI. It operates as a stateless Python module, designed to be easily integrated into enterprise Clinical Trial Management Systems (CTMS) via REST API.
+**Core Technical Pillars**:
+1. **The Table Agent (Site Feasibility)**: Uses layout-aware parsing to serialize 2D Schedule of Assessment tables into structured dataframes, ensuring accurate staff-hour and procedure calculations.
+2. **The Logic Agent (Patient Recruitment):** Implements dependency parsing to transform nested Inclusion/Exclusion criteria into boolean logic trees, identifying "blocker clauses" that stifle enrollment.
+3. **The Temporal Agent (Biospecimen Feasibility):** Maps invasive procedures across the trial timeline to identify "burden spikes"—weeks where the physical demand on the patient is likely to result in study dropout.
 
 ---
 
-## Key Features
+### Enterprise Architecture
 
-* **Interactive Radar Dashboards:** Visual breakdown of where a protocol's burden lies (Patient vs. Site vs. Design).
-* **Real-time Optimization Simulator:** "What-if" analysis sliders that instantly recalculate the PCS to support trade-off discussions.
-* **RWD Feasibility Alerts:** Flags specific criteria (e.g., "ECOG Status 0") that historically lead to high screen failure rates based on synthetic Real World Data.
+To meet the security and transparency requirements of pharmaceutical R&D, ProtoScore V2 is built on a decoupled, enterprised-grade stack. 
+
+**Model Agnostic Backend**
+
+Designed for strict data governance, the backend uses a router-based architecture that allows for a toggle between inference engines:
+
+* **Cloud Exection**: Leverages high-reasoning models via API for public or non-sensitive protocols.
+* **Local Exection**: Supports secure, on-premise deployment via local LLMs (e.g., Llama 3) for highly sensitive Phase I pipeline assets, ensuring zero data exfiltration.
+
+**Explainable AI (XAI)**
+
+Clinician trust is built through transparency. Every score generated by ProtoScore includes a 'Click-to-Verify' audit trail:
+* Each extracted value is linked to a specific citation object containing the exact quote, page number, and confidence score.
+* The UI features a split-screen view where clicking a metric automatically scrolls and highlights the evidence within the source PDF.
+
+### Technical Stack
+
+* Frontend: Gradio & front-end design skill by Claude for a clinical-grade, high-fidelity user interface.
+* Backend: FastAPI (Python) providing a stateless, scalable REST API.
+* Orchestration: LangChain and LiteLLM for model-agnostic routing. 
+* Data Layer: ChromaDB for local vector storage and LlamaParse for multimodal document ingestion. 
+
+---
+
+### About the Project 
+
+This project was developed by **Sachin Patel** during the **MS in Applied Data Science program at the University of Chicago**. The inspiration for ProtoScore stems from real-world experience at Tempus AI, where the need to replace "gut-feelings" in oncology trial design with data-driven decision-making became apparent. 
+
+**Vision**: To make clinical development more efficient and accessible by demystifying the decision-making process through safe, explainable AI.
 
 ---
 
