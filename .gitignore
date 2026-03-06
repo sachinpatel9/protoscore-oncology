@@ -1,0 +1,45 @@
+# Claude AI tooling (not for version control)
+CLAUDE.md
+.claude/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.egg
+dist/
+build/
+.Python
+pip-log.txt
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Gradio runtime
+gradio_cached_examples/
+flagged/
+
+# Data & model artifacts
+*.log
+*.pkl
+*.h5
+*.onnx
+
+# Docs (proprietary)
+docs/
+
+# OS
+.DS_Store
+.Rhistory
+Thumbs.db

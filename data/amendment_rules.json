@@ -1,0 +1,125 @@
+{
+  "version": "1.0",
+  "description": "Protocol Amendment Risk Ruleset — configurable without code changes. Weights are editable. Source: expert clinical operations review + published amendment frequency literature.",
+  "rules": [
+    {
+      "rule_id": "AMR-01",
+      "pattern": "ECOG 0 only in solid tumour indication",
+      "detection": {
+        "type": "criteria_text_match",
+        "match_patterns": ["ECOG.*(?:performance|status)?.*(?:=|of|:)?\\s*0(?!\\s*[-–]\\s*[12])"],
+        "exclude_indications": ["haematology", "hematology", "leukemia", "lymphoma", "myeloma"]
+      },
+      "weight": 0.70,
+      "common_amendment": "Expand to ECOG 0-1 post-activation due to slow enrollment",
+      "mitigation": "Consider expanding eligibility to ECOG 0-1 to increase the recruitable patient pool by ~40%."
+    },
+    {
+      "rule_id": "AMR-02",
+      "pattern": "Biopsy count > 3 total",
+      "detection": {
+        "type": "numeric_threshold",
+        "field": "invasive_procedures",
+        "operator": ">",
+        "threshold": 3
+      },
+      "weight": 0.60,
+      "common_amendment": "Remove or make optional one biopsy to reduce screen fail",
+      "mitigation": "Consider making at least one biopsy optional (e.g., 'if accessible') to reduce screen failure rates."
+    },
+    {
+      "rule_id": "AMR-03",
+      "pattern": "Concomitant medication exclusion list > 15 drugs",
+      "detection": {
+        "type": "criteria_text_match",
+        "match_patterns": ["concomitant.*(?:medication|drug|therap)", "prohibited.*(?:medication|drug|therap)", "excluded.*(?:medication|drug|therap)"],
+        "count_entities": true,
+        "entity_threshold": 15
+      },
+      "weight": 0.55,
+      "common_amendment": "Narrow concomitant medication exclusions to mechanistically relevant drugs only",
+      "mitigation": "Narrow the exclusion list to drugs with known mechanistic interaction with the study agent."
+    },
+    {
+      "rule_id": "AMR-04",
+      "pattern": "Response assessment window < 6 weeks in IO trial",
+      "detection": {
+        "type": "compound_match",
+        "conditions": [
+          {
+            "type": "criteria_text_match",
+            "match_patterns": ["checkpoint.*inhibitor", "anti[-\\s]?PD[-\\s]?[1L]", "anti[-\\s]?CTLA", "immunotherapy", "pembrolizumab", "nivolumab", "atezolizumab", "durvalumab", "ipilimumab", "avelumab", "cemiplimab"]
+          },
+          {
+            "type": "criteria_text_match",
+            "match_patterns": ["(?:response|tumor|tumour).*assess.*(?:every|each|q)\\s*(\\d+)\\s*(?:week|wk)"],
+            "extract_number": true,
+            "number_operator": "<",
+            "number_threshold": 6
+          }
+        ]
+      },
+      "weight": 0.80,
+      "common_amendment": "Extend assessment window to 8-12 weeks to accommodate delayed IO response",
+      "mitigation": "Extend response assessment window to 8-12 weeks to accommodate delayed immune-mediated responses (pseudoprogression)."
+    },
+    {
+      "rule_id": "AMR-05",
+      "pattern": "Ambiguous language without numeric threshold in exclusion criterion",
+      "detection": {
+        "type": "criteria_text_match",
+        "match_patterns": ["clinically significant(?!.*\\d)", "medically relevant(?!.*\\d)", "clinically meaningful(?!.*\\d)"],
+        "search_scope": "exclusion_only"
+      },
+      "weight": 0.60,
+      "common_amendment": "Add numeric threshold (e.g., 'ALT > 3x ULN') to prevent inconsistent screening",
+      "mitigation": "Replace ambiguous language with specific numeric thresholds to ensure consistent screening across sites."
+    },
+    {
+      "rule_id": "AMR-06",
+      "pattern": "Prior therapy lines threshold set to exactly first-line",
+      "detection": {
+        "type": "criteria_text_match",
+        "match_patterns": ["(?:first|1st|1)[-\\s]?line(?:\\s+(?:only|treatment|therapy))?", "no\\s+prior.*(?:systemic|anti[-\\s]?cancer|chemo)", "treatment[-\\s]?na[iï]ve"]
+      },
+      "weight": 0.65,
+      "common_amendment": "Expand to 1-2 prior lines due to rapidly changing SOC landscape",
+      "mitigation": "Consider expanding to 1-2 prior therapy lines to account for rapidly evolving standard-of-care treatment patterns."
+    },
+    {
+      "rule_id": "AMR-07",
+      "pattern": "Lab eligibility threshold at exact ULN boundary",
+      "detection": {
+        "type": "criteria_text_match",
+        "match_patterns": ["[<≤]\\s*1\\.?0?\\s*[x×]\\s*(?:ULN|upper\\s+limit)", "(?:ULN|upper\\s+limit).*[<≤]\\s*1\\.?0?\\s*[x×]"]
+      },
+      "weight": 0.50,
+      "common_amendment": "Add +/-10% buffer to prevent screen failures from lab variability",
+      "mitigation": "Add a 10% buffer (e.g., 1.0x ULN -> 1.1x ULN) to prevent screen failures from normal lab variability."
+    },
+    {
+      "rule_id": "AMR-08",
+      "pattern": "Double-blind design without sham procedure detail",
+      "detection": {
+        "type": "compound_match",
+        "conditions": [
+          {
+            "type": "criteria_text_match",
+            "match_patterns": ["double[-\\s]?blind"]
+          },
+          {
+            "type": "criteria_text_absent",
+            "absent_patterns": ["sham", "placebo.*(?:infusion|injection|procedure)", "matching.*(?:infusion|injection|procedure)"]
+          },
+          {
+            "type": "criteria_text_match",
+            "match_patterns": ["(?:intravenous|IV|subcutaneous|SC|intramuscular|IM)\\s+(?:infusion|injection|administration)"]
+          }
+        ]
+      },
+      "weight": 0.55,
+      "common_amendment": "Add sham procedure protocol to maintain blind integrity",
+      "mitigation": "Define a sham procedure protocol (e.g., matching IV infusion) to maintain blinding integrity for the non-oral route of administration."
+    }
+  ]
+}

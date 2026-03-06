@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "description": "Procedure Weight Taxonomy (Appendix A). All values in minutes. Editable without code change. Extend per indication as needed.",
+  "procedures": [
+    {"name": "Vital Signs", "category": "Clinical Assessment", "minutes": 10, "invasive": false, "aliases": ["vitals", "vital sign", "blood pressure", "heart rate", "temperature"]},
+    {"name": "Physical Examination", "category": "Clinical Assessment", "minutes": 20, "invasive": false, "aliases": ["physical exam", "PE", "complete physical", "targeted physical"]},
+    {"name": "ECOG Performance Status", "category": "Clinical Assessment", "minutes": 10, "invasive": false, "aliases": ["ECOG", "performance status", "ECOG PS", "KPS", "Karnofsky"]},
+    {"name": "12-Lead ECG", "category": "Cardiac", "minutes": 20, "invasive": false, "aliases": ["ECG", "EKG", "electrocardiogram", "12-lead"]},
+    {"name": "Echocardiogram / MUGA", "category": "Cardiac", "minutes": 45, "invasive": false, "aliases": ["echocardiogram", "echo", "MUGA", "LVEF", "cardiac function", "multigated"]},
+    {"name": "Blood Draw (Routine labs)", "category": "Biospecimen", "minutes": 15, "invasive": true, "aliases": ["blood draw", "routine labs", "CBC", "CMP", "hematology", "chemistry", "laboratory", "blood sample", "serum"]},
+    {"name": "PK Blood Draw", "category": "Biospecimen", "minutes": 45, "invasive": true, "aliases": ["PK", "pharmacokinetic", "PK sample", "PK blood", "serial PK", "trough level"]},
+    {"name": "Bone Marrow Biopsy", "category": "Biospecimen", "minutes": 120, "invasive": true, "aliases": ["bone marrow", "BM biopsy", "marrow aspirate", "bone marrow aspirate"]},
+    {"name": "Tumor Biopsy (core needle)", "category": "Biospecimen", "minutes": 180, "invasive": true, "aliases": ["tumor biopsy", "biopsy", "core needle", "tissue biopsy", "tissue sample", "fresh biopsy", "mandatory biopsy", "optional biopsy"]},
+    {"name": "Urine Sample", "category": "Biospecimen", "minutes": 10, "invasive": false, "aliases": ["urine", "urinalysis", "urine sample", "urine collection"]},
+    {"name": "CT Scan", "category": "Imaging", "minutes": 60, "invasive": false, "aliases": ["CT", "CT scan", "computed tomography", "CT chest", "CT abdomen"]},
+    {"name": "MRI", "category": "Imaging", "minutes": 90, "invasive": false, "aliases": ["MRI", "magnetic resonance", "MR imaging", "brain MRI"]},
+    {"name": "PET Scan", "category": "Imaging", "minutes": 180, "invasive": false, "aliases": ["PET", "PET scan", "PET/CT", "PET-CT", "FDG-PET"]},
+    {"name": "Chest X-Ray", "category": "Imaging", "minutes": 20, "invasive": false, "aliases": ["chest X-ray", "CXR", "chest radiograph", "X-ray"]},
+    {"name": "Ophthalmologic Exam", "category": "Specialty", "minutes": 60, "invasive": false, "aliases": ["ophthalmologic", "eye exam", "slit lamp", "fundoscopy", "visual acuity"]},
+    {"name": "Audiogram", "category": "Specialty", "minutes": 45, "invasive": false, "aliases": ["audiogram", "hearing test", "audiometry"]},
+    {"name": "Neuropsychological Assessment", "category": "PRO/Assessment", "minutes": 90, "invasive": false, "aliases": ["neuropsychological", "neuro assessment", "cognitive assessment", "MMSE"]},
+    {"name": "Patient-Reported Outcome (questionnaire)", "category": "PRO/Assessment", "minutes": 20, "invasive": false, "aliases": ["PRO", "questionnaire", "QoL", "quality of life", "EQ-5D", "EORTC", "SF-36", "patient reported", "ePRO"]},
+    {"name": "Study Drug Administration (IV infusion)", "category": "Treatment", "minutes": 180, "invasive": true, "aliases": ["IV infusion", "intravenous", "IV administration", "infusion", "IV drug"]},
+    {"name": "Study Drug Administration (oral)", "category": "Treatment", "minutes": 10, "invasive": false, "aliases": ["oral administration", "oral drug", "oral dose", "tablet", "capsule"]},
+    {"name": "Lumbar Puncture", "category": "Biospecimen", "minutes": 60, "invasive": true, "aliases": ["lumbar puncture", "LP", "spinal tap", "CSF", "cerebrospinal"]},
+    {"name": "Leukapheresis", "category": "Biospecimen", "minutes": 240, "invasive": true, "aliases": ["leukapheresis", "apheresis"]},
+    {"name": "Skin Biopsy", "category": "Biospecimen", "minutes": 30, "invasive": true, "aliases": ["skin biopsy", "punch biopsy", "dermal biopsy"]},
+    {"name": "DEXA Scan", "category": "Imaging", "minutes": 30, "invasive": false, "aliases": ["DEXA", "bone density", "DXA"]},
+    {"name": "Pulmonary Function Test", "category": "Specialty", "minutes": 45, "invasive": false, "aliases": ["pulmonary function", "PFT", "spirometry", "DLCO", "FEV1"]}
+  ]
+}

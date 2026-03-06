@@ -1,0 +1,14 @@
+gradio>=4.0
+pandas
+plotly
+numpy
+anthropic>=0.39.0
+pdfplumber>=0.11
+PyMuPDF>=1.24
+python-docx>=1.1
+python-dotenv>=1.0
+rapidfuzz>=3.0
+Pillow>=10.0
+requests>=2.31
+fpdf2>=2.7
+kaleido>=0.2
