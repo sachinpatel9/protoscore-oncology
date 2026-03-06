@@ -5,7 +5,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-red)
 ![Pandas](https://img.shields.io/badge/Pandas-yellow)
 ![Orchestration](https://img.shields.io/badge/LangChain_and_LiteLLM-indigoblue)
-![Status](https://img.shields.io/badge/Status-MVP_Live-Local-blue)
+![Status](https://img.shields.io/badge/Status-MVP_Live-Local%2B-blue)
 ![Focus](https://img.shields.io/badge/Domain-Oncology_Clinical_Ops-teal)
 
 ## The Cognitive Feasibility Engine
