@@ -1,7 +1,7 @@
 # ProtoScore Oncology: Clinical Trial Feasibility Engine
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Gradio](https://img.shields.io/badge/Gradio-1.30%2B-FF4B4B)
+![Python](https://img.shields.io/badge/Python%2B-blue)
+![Gradio](https://img.shields.io/badge/Gradio%2B-FF4B4B)
 ![FastAPI](https://img.shields.io/badge/FastAPI-red)
 ![Pandas](https://img.shields.io/badge/Pandas-yellow)
 ![Orchestration](https://img.shields.io/badge/LangChain_and_LiteLLM-indigoblue)
