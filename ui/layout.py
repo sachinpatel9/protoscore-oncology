@@ -182,16 +182,61 @@ CUSTOM_CSS = """
         font-size: 0.85em !important;
         font-family: var(--ps-font-body) !important;
     }
+    .verification-table table th {
+        font-size: 11px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        color: #64748B !important;
+        border-bottom: 2px solid #E2E8F0 !important;
+        font-family: 'Nunito Sans', sans-serif !important;
+    }
+    .verification-table table tr:nth-child(even) td {
+        background: #F8FAFB !important;
+    }
+    .verification-table table tr:nth-child(odd) td {
+        background: #FFFFFF !important;
+    }
     .verification-table td {
         white-space: pre-wrap !important;
         word-break: break-word;
         max-width: 250px;
         color: var(--ps-text) !important;
     }
+    .verification-table td:last-child {
+        min-width: 100px !important;
+        white-space: nowrap !important;
+    }
     .verification-table input {
         background: var(--ps-card) !important;
         color: var(--ps-text) !important;
         border: 1px solid var(--ps-border) !important;
+    }
+
+    /* --- Batch verification action buttons --- */
+    .bulk-approve-btn button {
+        background: #F0FDF4 !important;
+        border: 1px solid #BBF7D0 !important;
+        color: #1A7A45 !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+    }
+    .confirm-score-btn button {
+        background: #0E7C86 !important;
+        color: white !important;
+        width: 100% !important;
+    }
+    .confirm-field-btn button {
+        border: 1px solid #0E7C86 !important;
+        color: #0E7C86 !important;
+        background: transparent !important;
+    }
+    .export-audit-btn button {
+        background: transparent !important;
+        border: none !important;
+        color: #64748B !important;
+        box-shadow: none !important;
+        text-decoration: underline !important;
     }
 
     /* --- Card hover transitions --- */

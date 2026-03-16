@@ -206,18 +206,20 @@ def build_inline_evidence_html(
         section = " > ".join(citation.section_path) if citation.section_path else ""
 
         quotes_html += f"""
-        <div style="background:#EDF2F7; padding:10px; border-radius:6px;
-                    border-left:3px solid #0E7C86; margin:6px 0;">
+        <div style="margin:6px 0;">
             <div style="font-size:11px; color:#94A3B8; margin-bottom:4px;
                         letter-spacing:0.08em; text-transform:uppercase;
                         font-family:'Nunito Sans', sans-serif;">
                 Citation {i + 1} · Page {citation.page_number} · {source_type}
                 {f' · {section}' if section else ''}
             </div>
-            <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#0D1B2A;
-                        white-space:pre-wrap; max-height:150px; overflow-y:auto;">
+            <blockquote style="border-left:3px solid #0E7C86; background:#F0F9FA;
+                               padding:12px; margin:0; border-radius:0 6px 6px 0;
+                               font-size:13px; font-family:'JetBrains Mono', 'Fira Code', monospace;
+                               color:#0D1B2A; white-space:pre-wrap; max-height:150px;
+                               overflow-y:auto;">
 {citation.quote}
-            </div>
+            </blockquote>
         </div>
         """
 
@@ -236,9 +238,9 @@ def build_inline_evidence_html(
     if thumbnail_b64:
         thumbnail_html = f"""
         <div style="margin-top:10px;">
-            <div style="font-size:11px; color:#94A3B8; margin-bottom:4px;
-                        letter-spacing:0.08em; text-transform:uppercase;">
-                PDF Source Page Preview
+            <div style="margin-bottom:6px;">
+                <span style="color:#0E7C86; font-size:13px; font-weight:600;
+                             cursor:pointer;">Jump to Source in PDF &#x2192;</span>
             </div>
             <img src="data:image/png;base64,{thumbnail_b64}"
                  style="max-width:100%; border:1px solid #E2E8F0; border-radius:6px;"
@@ -316,11 +318,22 @@ def build_confidence_dashboard_html(verif_state: dict | None) -> str:
 
     # Calculate bar widths (stacked, total = 100%)
     verified_bar = min(verified_pct, 100)
-    pending_bar = min(pending_pct, 100 - verified_bar)
+    highconf_bar = max(0, min(high_pct - verified_pct, 100 - verified_bar))
+    pending_bar = min(pending_pct, 100 - verified_bar - highconf_bar)
+
+    corrections_col = ""
+    if corrections > 0:
+        corrections_col = f"""
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{corrections}</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Corrections</div>
+            </div>
+        """
 
     return f"""
-    <div style="background:#FFFFFF; padding:12px 16px; border-radius:12px;
-                border:1px solid {grade_color}; margin-bottom:12px;
+    <div style="background:#FFFFFF; padding:16px; border-radius:12px;
+                border:1px solid #E2E8F0; margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -331,25 +344,38 @@ def build_confidence_dashboard_html(verif_state: dict | None) -> str:
                     {stats['total']} fields total
                 </span>
             </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="font-size:1.8em; font-weight:800; color:{grade_color};
-                            font-family:'Lora', Georgia, serif;">{grade}</span>
-            </div>
+            <span style="background:{grade_color}; color:white; padding:6px 18px;
+                         border-radius:20px; font-size:20px; font-weight:800;
+                         font-family:'Lora', Georgia, serif;">{grade}</span>
         </div>
 
         <div style="display:flex; height:8px; border-radius:4px; overflow:hidden;
-                    margin:10px 0 6px 0; background:#E2E8F0;">
+                    margin:12px 0 10px 0; background:#E2E8F0;">
             <div style="width:{verified_bar}%; background:#1A7A45;"
                  title="Verified: {verified_pct}%"></div>
+            <div style="width:{highconf_bar}%; background:#0E7C86;"
+                 title="High Confidence: {high_pct}%"></div>
             <div style="width:{pending_bar}%; background:#E68A00;"
                  title="Pending: {pending_pct}%"></div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; font-size:11px; color:#94A3B8;">
-            <span style="color:#1A7A45;">Verified: {verified_pct}%</span>
-            <span>High Conf (&#8805;85%): {high_pct}%</span>
-            <span style="color:#E68A00;">Pending: {pending_pct}%</span>
-            {f'<span style="color:#0E7C86;">Corrections: {corrections}</span>' if corrections > 0 else ''}
+        <div style="display:flex; justify-content:space-around; text-align:center;">
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#1A7A45;">{verified_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Verified</div>
+            </div>
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{high_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">High Conf &#8805;85%</div>
+            </div>
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#E68A00;">{pending_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Pending</div>
+            </div>
+            {corrections_col}
         </div>
     </div>
     """

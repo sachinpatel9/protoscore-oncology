@@ -625,7 +625,8 @@ def build_score_reliability_header(verif_state: dict | None) -> str:
             <span style="font-size:11px; color:#64748B; text-transform:uppercase;
                         letter-spacing:0.08em; font-weight:600;
                         font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
-            <span style="font-size:1.4em; font-weight:800; color:{grade_color};
+            <span style="background:{grade_color}; color:white; padding:4px 12px;
+                        border-radius:14px; font-size:14px; font-weight:800;
                         font-family:'Lora', Georgia, serif;">{grade}</span>
         </div>
         <div style="display:flex; height:6px; border-radius:3px; overflow:hidden;

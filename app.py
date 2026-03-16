@@ -1058,6 +1058,7 @@ def build_app():
                             "Bulk Approve High-Confidence Fields (\u2265 0.85)",
                             variant="secondary",
                             size="sm",
+                            elem_classes=["bulk-approve-btn"],
                         )
 
                         # Main batch review dataframe
@@ -1081,12 +1082,14 @@ def build_app():
                                 variant="secondary",
                                 size="sm",
                                 scale=1,
+                                elem_classes=["confirm-field-btn"],
                             )
                             confirm_score_btn = gr.Button(
                                 "Confirm & Score",
                                 variant="primary",
                                 size="lg",
                                 scale=2,
+                                elem_classes=["confirm-score-btn"],
                             )
 
                         # Audit log export (FR-4.4)
@@ -1095,6 +1098,7 @@ def build_app():
                                 "Export Audit Log (JSON)",
                                 variant="secondary",
                                 size="sm",
+                                elem_classes=["export-audit-btn"],
                             )
                             audit_download = gr.File(
                                 label="Audit Log Download",
@@ -1105,12 +1109,19 @@ def build_app():
                     with gr.Column(scale=2):
                         gr.Markdown("### Source Evidence")
                         inline_evidence_html = gr.HTML(
-                            '<div style="color:#94A3B8; padding:20px;">'
-                            'Click a row in the table to see source evidence, '
-                            'including the PDF page and AI reasoning.</div>'
+                            '<div style="display:flex; flex-direction:column; align-items:center; '
+                            'justify-content:center; min-height:300px; padding:40px 20px;">'
+                            '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" '
+                            'xmlns="http://www.w3.org/2000/svg">'
+                            '<path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 '
+                            '20 21.1 20 20V8L14 2Z" fill="#CBD5E1"/>'
+                            '<path d="M14 2V8H20" fill="#94A3B8"/></svg>'
+                            '<div style="font-size:13px; color:#94A3B8; margin-top:12px; '
+                            'text-align:center; font-family:\'Nunito Sans\', sans-serif;">'
+                            'Click any row to view source evidence</div></div>'
                         )
                         evidence_thumbnail = gr.Image(
-                            label="Source PDF Page",
+                            label="Jump to Source in PDF →",
                             type="pil",
                             height=400,
                         )
