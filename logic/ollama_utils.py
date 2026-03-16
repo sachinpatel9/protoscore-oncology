@@ -289,42 +289,40 @@ def call_ollama_chat(
 # ---------------------------------------------------------------------------
 
 def get_ollama_status_html() -> str:
-    """Build an HTML status widget for the Ollama connection and model."""
+    """Build a compact status pill for the Ollama connection and model."""
+    pill_style = (
+        "display:flex; align-items:center; gap:6px; "
+        "padding:6px 12px; border-radius:6px; margin:4px 0; "
+        "font-size:10px; font-family:'Nunito Sans', sans-serif;"
+    )
+
     if not check_ollama_running():
         return (
-            '<div style="padding:10px; background:#2a1515; border:1px solid #F44336; '
-            'border-radius:8px; margin:8px 0; font-size:0.85em;">'
-            '<span style="color:#F44336; font-weight:700;">&#x2717; Ollama Not Running</span><br>'
-            '<span style="color:#ccc;">Install from '
-            '<a href="https://ollama.com" target="_blank" style="color:#00A3E0;">ollama.com</a>, '
-            'then run <code style="background:#333; padding:2px 6px; border-radius:3px;">ollama serve</code></span>'
+            f'<div style="{pill_style} background:#FEF2F2; border:1px solid #FECACA;">'
+            '<span style="color:#C0392B;">&#x25CF;</span> '
+            '<span style="color:#334155;">Not Running &middot; '
+            'Install from <a href="https://ollama.com" target="_blank" '
+            'style="color:#0E7C86;">ollama.com</a>, '
+            'then run <code style="background:#F0F4F8; padding:1px 4px; '
+            'border-radius:3px; font-size:10px;">ollama serve</code></span>'
             '</div>'
         )
 
     installed = get_installed_models()
     model, tier, rationale = recommend_model(installed)
-    tier_color = {1: "#4CAF50", 2: "#00A3E0", 3: "#FF9800"}.get(tier, "#888")
 
-    if model in [m for m in installed]:
-        status_icon = '<span style="color:#4CAF50; font-weight:700;">&#x2713; Connected</span>'
-        model_line = (
-            f'<span style="color:{tier_color}; font-weight:600;">'
-            f'Model: {model}</span> '
-            f'<span style="background:{tier_color}; color:#000; padding:2px 8px; '
-            f'border-radius:10px; font-size:0.8em; font-weight:600;">'
-            f'Tier {tier} — {TIER_LABELS[tier]}</span>'
-        )
-    else:
-        status_icon = '<span style="color:#FF9800; font-weight:700;">&#x26A0; No Model</span>'
-        model_line = (
-            f'<span style="color:#ccc;">{rationale}</span><br>'
-            f'<span style="color:#aaa; font-size:0.85em;">Will auto-pull when you click Analyze.</span>'
+    if model in installed:
+        return (
+            f'<div style="{pill_style} background:#F0FDF4; border:1px solid #BBF7D0;">'
+            f'<span style="color:#1A7A45;">&#x25CF;</span> '
+            f'<span style="color:#334155;">Connected &middot; {model} &middot; '
+            f'Tier {tier}</span>'
+            f'</div>'
         )
 
     return (
-        f'<div style="padding:10px; background:#1a1a2e; border:1px solid #333; '
-        f'border-radius:8px; margin:8px 0; font-size:0.85em;">'
-        f'{status_icon}<br>'
-        f'{model_line}'
+        f'<div style="{pill_style} background:#FFFBEB; border:1px solid #FDE68A;">'
+        f'<span style="color:#E68A00;">&#x25CF;</span> '
+        f'<span style="color:#334155;">No Model &middot; Will auto-pull on Analyze</span>'
         f'</div>'
     )

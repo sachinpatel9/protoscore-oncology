@@ -930,6 +930,7 @@ def build_app():
             value="Demo Protocols",
             label="Mode",
             interactive=True,
+            elem_classes=["mode-toggle"],
         )
 
         # =================================================================
@@ -948,6 +949,7 @@ def build_app():
                     label="LLM Provider",
                     interactive=True,
                     scale=1,
+                    elem_classes=["llm-selector"],
                 )
                 analyze_btn = gr.Button(
                     "Analyze Protocol",

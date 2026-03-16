@@ -107,14 +107,65 @@ CUSTOM_CSS = """
     }
 
     /* --- Tabs styling --- */
+    .tab-nav {
+        border-bottom: 2px solid #E2E8F0 !important;
+    }
     .tab-nav button {
         font-family: var(--ps-font-body) !important;
         font-weight: 600 !important;
-        color: var(--ps-text-secondary) !important;
+        color: #64748B !important;
+        border-bottom: 2px solid transparent !important;
+        margin-bottom: -2px !important;
     }
     .tab-nav button.selected {
-        color: var(--ps-teal) !important;
-        border-color: var(--ps-teal) !important;
+        color: #0E7C86 !important;
+        border-bottom: 2px solid #0E7C86 !important;
+    }
+
+    /* --- Mode selector pill toggle --- */
+    .mode-toggle {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    .mode-toggle .wrap {
+        background: #F1F5F9 !important;
+        border-radius: 24px !important;
+        padding: 4px !important;
+        gap: 0 !important;
+    }
+    .mode-toggle label {
+        padding: 6px 20px !important;
+        border-radius: 20px !important;
+        color: #64748B !important;
+        background: transparent !important;
+        border: none !important;
+        font-size: 13px !important;
+        font-family: var(--ps-font-body) !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+    }
+    .mode-toggle label.selected {
+        background: #0E7C86 !important;
+        color: #FFFFFF !important;
+    }
+    .mode-toggle .hide, .mode-toggle > label:first-child {
+        display: none !important;
+    }
+
+    /* --- LLM Provider selector --- */
+    .llm-selector label span {
+        font-size: 11px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        color: #64748B !important;
+    }
+    .llm-selector select,
+    .llm-selector input,
+    .llm-selector .wrap-inner {
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+        background: #FFFFFF !important;
     }
 
     /* --- PDF viewer panel --- */
@@ -172,20 +223,25 @@ CUSTOM_CSS = """
 
 
 HEADER_HTML = """
-<div style="display:flex; align-items:center; gap:12px; padding:10px 0;
-            border-bottom: 1px solid #E2E8F0; margin-bottom: 8px;">
-    <div style="font-family:'Lora', Georgia, serif;
-                font-size:24px; font-weight:700; color:#0D1B2A;">
-        ProtoScore
+<div style="padding:8px 0; border-bottom:1px solid #E2E8F0; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <div style="font-family:'Lora', Georgia, serif;
+                    font-size:24px; font-weight:700; color:#0D1B2A;">
+            ProtoScore
+        </div>
+        <div style="font-family:'Lora', Georgia, serif;
+                    font-size:24px; font-weight:400; border-left:2px solid #E2E8F0;
+                    padding-left:12px; color:#0E7C86;">
+            Oncology
+        </div>
+        <div style="margin-left:auto; font-size:11px; color:#94A3B8;
+                    font-family:'Nunito Sans', sans-serif;">
+            V2.0
+        </div>
     </div>
-    <div style="font-family:'Lora', Georgia, serif;
-                font-size:24px; font-weight:400; border-left:2px solid #E2E8F0;
-                padding-left:12px; color:#0E7C86;">
-        Oncology
-    </div>
-    <div style="margin-left:auto; font-size:0.75em; color:#94A3B8;
+    <div style="font-size:12px; font-style:italic; color:#64748B; margin-top:4px;
                 font-family:'Nunito Sans', sans-serif;">
-        V2.0
+        Protocol Complexity Intelligence for Oncology Trials
     </div>
 </div>
 """
