@@ -27,29 +27,29 @@ from logic.audit_log import get_verification_stats
 
 
 # ---------------------------------------------------------------------------
-# Brand Constants (print-adapted warm palette)
+# Brand Constants (clinical design system — print palette)
 # ---------------------------------------------------------------------------
-SAGE = (91, 123, 111)        # #5B7B6F — primary accent
-TERRACOTTA = (192, 117, 91)  # #C0755B — secondary accent / high risk
-BRONZE = (139, 111, 78)      # #8B6F4E — tertiary accent
-GOLD = (212, 160, 74)        # #D4A04A — warning/medium
-DARK = (44, 44, 44)          # #2C2C2C — print text
-GRAY = (107, 114, 128)       # #6B7280 — secondary text
-LIGHT_GRAY = (229, 224, 216) # #E5E0D8 — borders/rules
+TEAL = (14, 124, 134)       # #0E7C86 — primary accent
+RED = (192, 57, 43)          # #C0392B — high risk
+GREEN = (26, 122, 69)        # #1A7A45 — low risk
+AMBER = (230, 138, 0)        # #E68A00 — moderate risk
+DARK = (13, 27, 42)          # #0D1B2A — navy / print text
+GRAY = (100, 116, 139)       # #64748B — secondary text
+LIGHT_GRAY = (226, 232, 240) # #E2E8F0 — borders/rules
 WHITE = (255, 255, 255)
-WARM_BG = (250, 247, 242)    # #FAF7F2 — tinted backgrounds
+WARM_BG = (248, 250, 251)    # #F8FAFB — background
 
 # Backward-compatible aliases
-TEAL = SAGE
-GREEN = SAGE
-AMBER = GOLD
-RED = TERRACOTTA
+SAGE = TEAL
+TERRACOTTA = RED
+BRONZE = GRAY
+GOLD = AMBER
 
 TIER_THRESHOLDS = [
-    (30, "Low", SAGE),
-    (55, "Moderate", GOLD),
-    (75, "High", (220, 130, 50)),
-    (100, "Very High", TERRACOTTA),
+    (30, "Low", GREEN),
+    (55, "Moderate", AMBER),
+    (75, "High", RED),
+    (100, "Very High", RED),
 ]
 
 
@@ -78,10 +78,10 @@ def _render_plotly_to_image(fig, width=500, height=350):
         print_fig.update_layout(
             paper_bgcolor="white",
             plot_bgcolor="white",
-            font=dict(color="#2C2C2C", family="Nunito Sans"),
+            font=dict(color="#0D1B2A", family="Nunito Sans"),
             polar=dict(
-                radialaxis=dict(gridcolor="#E5E0D8", color="#2C2C2C"),
-                angularaxis=dict(color="#2C2C2C"),
+                radialaxis=dict(gridcolor="#E2E8F0", color="#0D1B2A"),
+                angularaxis=dict(color="#0D1B2A"),
                 bgcolor="white",
             ),
         )

@@ -1,32 +1,38 @@
 """
 Gradio theme and layout constants for ProtoScore V2.
-Warm Clinical / Organic Modern design system.
+Clinical design system — cool clinical palette with strict typography hierarchy.
 """
 
 import gradio as gr
 
 
-# -- Warm Clinical / Organic Modern palette --
-SAGE = "#5B7B6F"
-TERRACOTTA = "#C0755B"
-BRONZE = "#8B6F4E"
-GOLD = "#D4A04A"
-WARM_BG = "#FAF7F2"
-CARD_BG = "#FFFFFF"
-PANEL_BG = "#F5F1EA"
-CODE_BG = "#F0EDE6"
-TEXT_PRIMARY = "#2C2C2C"
-TEXT_SECONDARY = "#6B7280"
-TEXT_TERTIARY = "#9CA3AF"
-BORDER = "#E5E0D8"
-STATUS_GOOD = "#5B7B6F"
-STATUS_OK = "#7A9E8E"
-STATUS_WARN = "#D4A04A"
-STATUS_BAD = "#C0755B"
+# -- Clinical Design System palette --
+TEAL = "#0E7C86"       # Primary accent (active states, buttons, highlights)
+NAVY = "#0D1B2A"       # Headings and score numbers
+RED = "#C0392B"         # High risk indicators only
+AMBER = "#E68A00"       # Moderate risk indicators only
+GREEN = "#1A7A45"       # Low risk indicators only
+BG = "#F8FAFB"          # App background (cool off-white)
+CARD_BG = "#FFFFFF"     # Card backgrounds
+PANEL_BG = "#F0F4F8"    # Panel/formula backgrounds
+CODE_BG = "#EDF2F7"     # Code block backgrounds
+TEXT_PRIMARY = "#0D1B2A" # Primary text (navy)
+TEXT_SECONDARY = "#64748B" # Labels, metadata
+TEXT_TERTIARY = "#94A3B8"  # Hints, disabled
+BORDER = "#E2E8F0"      # Borders and rules
+FORMULA_TEXT = "#334155" # Formula/code body text
 
 # Backward-compatible aliases
-TEAL = SAGE
-DARK_BG = WARM_BG
+SAGE = TEAL
+TERRACOTTA = RED
+BRONZE = TEXT_SECONDARY
+GOLD = AMBER
+WARM_BG = BG
+DARK_BG = BG
+STATUS_GOOD = GREEN
+STATUS_OK = "#3A9CA5"   # Lighter teal for Grade B
+STATUS_WARN = AMBER
+STATUS_BAD = RED
 
 # Custom CSS for the Gradio app
 CUSTOM_CSS = """
@@ -35,18 +41,19 @@ CUSTOM_CSS = """
 
     /* --- CSS Custom Properties (Design Tokens) --- */
     :root {
-        --ps-bg: #FAF7F2;
-        --ps-panel: #F5F1EA;
+        --ps-bg: #F8FAFB;
+        --ps-panel: #F0F4F8;
         --ps-card: #FFFFFF;
-        --ps-code: #F0EDE6;
-        --ps-text: #2C2C2C;
-        --ps-text-secondary: #6B7280;
-        --ps-text-tertiary: #9CA3AF;
-        --ps-sage: #5B7B6F;
-        --ps-terracotta: #C0755B;
-        --ps-bronze: #8B6F4E;
-        --ps-gold: #D4A04A;
-        --ps-border: #E5E0D8;
+        --ps-code: #EDF2F7;
+        --ps-text: #0D1B2A;
+        --ps-text-secondary: #64748B;
+        --ps-text-tertiary: #94A3B8;
+        --ps-teal: #0E7C86;
+        --ps-red: #C0392B;
+        --ps-navy: #0D1B2A;
+        --ps-amber: #E68A00;
+        --ps-green: #1A7A45;
+        --ps-border: #E2E8F0;
         --ps-shadow: 0 2px 8px rgba(0,0,0,0.06);
         --ps-shadow-hover: 0 4px 16px rgba(0,0,0,0.10);
         --ps-radius: 12px;
@@ -67,22 +74,22 @@ CUSTOM_CSS = """
         --background-fill-secondary: var(--ps-panel) !important;
         --block-background-fill: var(--ps-card) !important;
         --body-background-fill: var(--ps-bg) !important;
-        --color-accent-soft: rgba(91, 123, 111, 0.1) !important;
+        --color-accent-soft: rgba(14, 124, 134, 0.1) !important;
         --body-text-color: var(--ps-text) !important;
         --block-label-text-color: var(--ps-text-secondary) !important;
         --input-background-fill: var(--ps-card) !important;
         --border-color-primary: var(--ps-border) !important;
         --block-border-color: var(--ps-border) !important;
         --panel-background-fill: var(--ps-panel) !important;
-        --button-primary-background-fill: var(--ps-sage) !important;
-        --button-primary-background-fill-hover: #4A6A5E !important;
+        --button-primary-background-fill: var(--ps-teal) !important;
+        --button-primary-background-fill-hover: #0A6670 !important;
         --button-primary-text-color: white !important;
         --button-secondary-background-fill: var(--ps-panel) !important;
         --button-secondary-text-color: var(--ps-text) !important;
         --button-secondary-border-color: var(--ps-border) !important;
     }
 
-    /* --- Paper texture background --- */
+    /* --- Subtle texture background --- */
     .gradio-container::before {
         content: '';
         position: fixed;
@@ -106,8 +113,8 @@ CUSTOM_CSS = """
         color: var(--ps-text-secondary) !important;
     }
     .tab-nav button.selected {
-        color: var(--ps-sage) !important;
-        border-color: var(--ps-sage) !important;
+        color: var(--ps-teal) !important;
+        border-color: var(--ps-teal) !important;
     }
 
     /* --- PDF viewer panel --- */
@@ -149,17 +156,17 @@ CUSTOM_CSS = """
 
 HEADER_HTML = """
 <div style="display:flex; align-items:center; gap:12px; padding:10px 0;
-            border-bottom: 1px solid #E5E0D8; margin-bottom: 8px;">
+            border-bottom: 1px solid #E2E8F0; margin-bottom: 8px;">
     <div style="font-family:'Lora', Georgia, serif;
-                font-size:1.8em; font-weight:700; color:#5B7B6F;">
+                font-size:24px; font-weight:700; color:#0D1B2A;">
         ProtoScore
     </div>
     <div style="font-family:'Lora', Georgia, serif;
-                font-size:1.4em; font-weight:600; border-left:2px solid #E5E0D8;
-                padding-left:12px; color:#C0755B;">
+                font-size:24px; font-weight:400; border-left:2px solid #E2E8F0;
+                padding-left:12px; color:#0E7C86;">
         Oncology
     </div>
-    <div style="margin-left:auto; font-size:0.75em; color:#9CA3AF;
+    <div style="margin-left:auto; font-size:0.75em; color:#94A3B8;
                 font-family:'Nunito Sans', sans-serif;">
         V2.0
     </div>

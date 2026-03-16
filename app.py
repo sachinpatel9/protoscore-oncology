@@ -112,9 +112,9 @@ def run_demo_analysis(protocol_id: str):
     insights_html = '<div style="padding:8px;">'
     for insight in insights:
         insights_html += f"""
-        <div style="background:#FFF8F0; padding:10px; border-radius:8px;
-                    border-left:3px solid #D4A04A; margin:8px 0;
-                    font-size:0.85em; color:#2C2C2C;">
+        <div style="background:#FFFBF0; padding:10px; border-radius:8px;
+                    border-left:3px solid #E68A00; margin:8px 0;
+                    font-size:13px; color:#0D1B2A;">
             {insight}
         </div>
         """
@@ -122,8 +122,8 @@ def run_demo_analysis(protocol_id: str):
 
     # Protocol info
     info_html = f"""
-    <div style="font-size:0.85em; color:#6B7280; padding:8px;">
-        <strong style="color:#2C2C2C;">{protocol['name']}</strong><br>
+    <div style="font-size:13px; color:#64748B; padding:8px;">
+        <strong style="color:#0D1B2A;">{protocol['name']}</strong><br>
         Phase {protocol['phase']} · {protocol.get('therapeutic_area', 'Oncology')}<br>
         {protocol.get('study_design', '')}
     </div>
@@ -288,7 +288,7 @@ def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
     Returns: (inline_evidence_html, evidence_thumbnail_image)
     """
     empty = (
-        '<div style="color:#9CA3AF; padding:20px;">Select a row to see source evidence.</div>',
+        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>',
         None,
     )
 
@@ -445,9 +445,9 @@ def on_confirm_and_score(result_state, verif_state):
     is_satisfied, message = get_review_gate_status(verif_state)
     if not is_satisfied:
         gate_html = f"""
-        <div style="background:#FFF5F5; padding:12px 16px; border-radius:8px;
-                    border:1px solid #C0755B; margin-bottom:8px;">
-            <span style="color:#C0755B; font-weight:600; font-size:0.85em;">
+        <div style="background:#FEF2F2; padding:12px 16px; border-radius:8px;
+                    border:1px solid #C0392B; margin-bottom:8px;">
+            <span style="color:#C0392B; font-weight:600; font-size:13px;">
                 &#10007; Cannot score yet: {message}
             </span>
         </div>
@@ -562,11 +562,11 @@ def on_export_pdf(result_state, verif_state, demo_selector_value, mode_value):
 def view_source(result_state, metric_key, file_bytes_state):
     """Show provenance panel and highlighted PDF page for a metric."""
     if result_state is None or not isinstance(result_state, ExtractionResult):
-        return "<div style='color:#9CA3AF; padding:8px;'>No extraction data available.</div>", None
+        return "<div style='color:#94A3B8; padding:8px;'>No extraction data available.</div>", None
 
     record = result_state.provenance.get(metric_key)
     if not record:
-        return "<div style='color:#9CA3AF; padding:8px;'>No provenance for this metric.</div>", None
+        return "<div style='color:#94A3B8; padding:8px;'>No provenance for this metric.</div>", None
 
     provenance_html = build_provenance_panel(record)
 
@@ -602,7 +602,7 @@ def navigate_to_metric(result_state, metric_key, file_bytes_state):
     record = result_state.provenance.get(metric_key)
     if not record or not record.citations:
         no_data = (
-            '<div style="color:#9CA3AF; font-size:0.85em; padding:8px;">'
+            '<div style="color:#94A3B8; font-size:13px; padding:8px;">'
             f'No source citations for "{metric_key}".</div>'
         )
         return (None, 1, "", "", no_data, 0)
@@ -737,22 +737,22 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
 
     delta = round(new_score["total"] - original_score["total"], 1)
     delta_sign = "+" if delta > 0 else ""
-    delta_color = "#C0755B" if delta > 0 else "#5B7B6F" if delta < 0 else "#9CA3AF"
+    delta_color = "#C0392B" if delta > 0 else "#1A7A45" if delta < 0 else "#94A3B8"
 
     html = f"""
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
         <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-            <div style="color:#6B7280; font-size:0.85em; font-family:'Nunito Sans', sans-serif;">Current Score</div>
-            <div style="font-size:2.5em; font-weight:700; color:#5B7B6F;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+            <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Current Score</div>
+            <div style="font-size:42px; font-weight:700; color:#0D1B2A;
                         font-family:'Lora', Georgia, serif;">
                 {original_score['total']:.1f}
             </div>
         </div>
         <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-            <div style="color:#6B7280; font-size:0.85em; font-family:'Nunito Sans', sans-serif;">Simulated Score</div>
-            <div style="font-size:2.5em; font-weight:700; color:{delta_color};
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+            <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Simulated Score</div>
+            <div style="font-size:42px; font-weight:700; color:{delta_color};
                         font-family:'Lora', Georgia, serif;">
                 {new_score['total']:.1f}
             </div>
@@ -767,15 +767,15 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
     fig.add_trace(go.Bar(
         x=["Current", "Simulated"],
         y=[original_score["total"], new_score["total"]],
-        marker_color=["#5B7B6F", delta_color],
+        marker_color=["#0E7C86", delta_color],
         text=[f"{original_score['total']:.1f}", f"{new_score['total']:.1f}"],
         textposition="auto",
     ))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#4B5563", family="Nunito Sans"),
-        yaxis=dict(range=[0, 100], gridcolor="#E5E0D8"),
+        font=dict(color="#334155", family="Nunito Sans"),
+        yaxis=dict(range=[0, 100], gridcolor="#E2E8F0"),
         height=300,
         margin=dict(l=40, r=40, t=20, b=40),
     )
@@ -789,7 +789,7 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     target_n = int(target_n)
 
     if num_sites <= 0 or target_n <= 0:
-        return '<div style="color:#9CA3AF; padding:8px;">Enter valid number of sites and target enrollment.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">Enter valid number of sites and target enrollment.</div>'
 
     # Get enrollment rate from current context
     enrollment_data = None
@@ -801,13 +801,13 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
         enrollment_data = protocol.get("enrollment_projection", {})
 
     if not enrollment_data:
-        return '<div style="color:#9CA3AF; padding:8px;">No enrollment projection available. Analyze a protocol first.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">No enrollment projection available. Analyze a protocol first.</div>'
 
     rate = enrollment_data.get("rate_per_site_per_month", 0)
     ci = enrollment_data.get("confidence_interval_80", [0, 0])
 
     if rate <= 0:
-        return '<div style="color:#9CA3AF; padding:8px;">Enrollment rate is zero. Cannot calculate timeline.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">Enrollment rate is zero. Cannot calculate timeline.</div>'
 
     # Base estimate
     base_months = target_n / (rate * num_sites)
@@ -825,53 +825,53 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     for label, adj_rate in scenarios:
         if adj_rate > 0:
             months = target_n / (adj_rate * num_sites)
-            color = "#5B7B6F" if months <= 18 else "#D4A04A" if months <= 30 else "#C0755B"
+            color = "#1A7A45" if months <= 18 else "#E68A00" if months <= 30 else "#C0392B"
         else:
             months = float("inf")
-            color = "#C0755B"
+            color = "#C0392B"
         months_str = f"{months:.1f}" if months != float("inf") else "N/A"
         rows_html += f"""
         <tr>
-            <td style="padding:8px; color:#2C2C2C;">{label}</td>
-            <td style="padding:8px; color:#6B7280; text-align:center;">{adj_rate:.2f}</td>
+            <td style="padding:8px; color:#0D1B2A;">{label}</td>
+            <td style="padding:8px; color:#64748B; text-align:center;">{adj_rate:.2f}</td>
             <td style="padding:8px; color:{color}; text-align:center; font-weight:600;">{months_str}</td>
         </tr>
         """
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px; margin-top:8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-        <div style="font-size:0.85em; color:#6B7280; font-weight:600; text-transform:uppercase;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+        <div style="font-size:11px; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
                     letter-spacing:1px; margin-bottom:12px;
                     font-family:'Nunito Sans', sans-serif;">Time-to-Full-Enrollment Estimate</div>
         <div style="display:flex; justify-content:space-around; margin-bottom:16px;">
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Projected Rate</div>
-                <div style="font-size:1.6em; font-weight:700; color:#5B7B6F;
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Projected Rate</div>
+                <div style="font-size:1.6em; font-weight:700; color:#0E7C86;
                             font-family:'Lora', Georgia, serif;">{rate}</div>
-                <div style="font-size:0.7em; color:#9CA3AF;">pts/site/month</div>
+                <div style="font-size:11px; color:#94A3B8;">pts/site/month</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Sites × Target</div>
-                <div style="font-size:1.6em; font-weight:700; color:#2C2C2C;">{num_sites} × {target_n}</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Sites × Target</div>
+                <div style="font-size:1.6em; font-weight:700; color:#0D1B2A;">{num_sites} × {target_n}</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Est. Duration</div>
-                <div style="font-size:1.6em; font-weight:700; color:{'#5B7B6F' if base_months <= 18 else '#D4A04A' if base_months <= 30 else '#C0755B'};
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Est. Duration</div>
+                <div style="font-size:1.6em; font-weight:700; color:{'#1A7A45' if base_months <= 18 else '#E68A00' if base_months <= 30 else '#C0392B'};
                             font-family:'Lora', Georgia, serif;">{base_months:.1f}</div>
-                <div style="font-size:0.7em; color:#9CA3AF;">months</div>
+                <div style="font-size:11px; color:#94A3B8;">months</div>
             </div>
         </div>
-        <div style="font-size:0.8em; color:#6B7280; margin-bottom:6px; font-weight:600;">SENSITIVITY TABLE</div>
+        <div style="font-size:11px; color:#64748B; margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">SENSITIVITY TABLE</div>
         <table style="width:100%; border-collapse:collapse; font-size:0.85em;">
-            <tr style="border-bottom:1px solid #E5E0D8;">
-                <th style="padding:8px; color:#6B7280; text-align:left;">Scenario</th>
-                <th style="padding:8px; color:#6B7280; text-align:center;">Rate (pts/site/mo)</th>
-                <th style="padding:8px; color:#6B7280; text-align:center;">Months to Full</th>
+            <tr style="border-bottom:1px solid #E2E8F0;">
+                <th style="padding:8px; color:#64748B; text-align:left;">Scenario</th>
+                <th style="padding:8px; color:#64748B; text-align:center;">Rate (pts/site/mo)</th>
+                <th style="padding:8px; color:#64748B; text-align:center;">Months to Full</th>
             </tr>
             {rows_html}
         </table>
-        <div style="font-size:0.7em; color:#9CA3AF; margin-top:8px; font-style:italic;">
+        <div style="font-size:11px; color:#94A3B8; margin-top:8px; font-style:italic;">
             Formula: months = target_N / (rate × num_sites)
         </div>
     </div>
@@ -1074,7 +1074,7 @@ def build_app():
                     with gr.Column(scale=2):
                         gr.Markdown("### Source Evidence")
                         inline_evidence_html = gr.HTML(
-                            '<div style="color:#9CA3AF; padding:20px;">'
+                            '<div style="color:#94A3B8; padding:20px;">'
                             'Click a row in the table to see source evidence, '
                             'including the PDF page and AI reasoning.</div>'
                         )
@@ -1123,7 +1123,7 @@ def build_app():
             # --- Tab 4: AI Insights ---
             with gr.Tab("AI Insights"):
                 insights_html = gr.HTML(
-                    '<div style="color:#9CA3AF; padding:20px;">Select a protocol to see insights.</div>'
+                    '<div style="color:#94A3B8; padding:20px;">Select a protocol to see insights.</div>'
                 )
 
         # =================================================================

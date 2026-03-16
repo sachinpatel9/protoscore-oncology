@@ -1,6 +1,6 @@
 """
 Extraction pipeline progress display for ProtoScore V2.
-Design: Warm Clinical / Organic Modern
+Design: Clinical Design System
 """
 
 
@@ -20,20 +20,20 @@ PIPELINE_STEPS = [
 def build_progress_html(step: str, fraction: float) -> str:
     """Build HTML progress bar with step description."""
     pct = int(fraction * 100)
-    bar_color = "#5B7B6F"  # Sage throughout
+    bar_color = "#0E7C86"  # Teal throughout
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
-                border:1px solid #E5E0D8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="font-size:0.85em; color:#6B7280; margin-bottom:8px;
+                border:1px solid #E2E8F0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <div style="font-size:13px; color:#64748B; margin-bottom:8px;
                     font-family:'Nunito Sans', sans-serif;">
             {step}
         </div>
-        <div style="background:#E5E0D8; border-radius:6px; height:8px; overflow:hidden;">
+        <div style="background:#E2E8F0; border-radius:6px; height:8px; overflow:hidden;">
             <div style="background:{bar_color}; height:100%; width:{pct}%;
                         border-radius:6px; transition:width 0.3s ease;"></div>
         </div>
-        <div style="font-size:0.75em; color:#9CA3AF; margin-top:4px; text-align:right;">
+        <div style="font-size:11px; color:#94A3B8; margin-top:4px; text-align:right;">
             {pct}%
         </div>
     </div>
