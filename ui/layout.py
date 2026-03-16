@@ -151,6 +151,23 @@ CUSTOM_CSS = """
         box-shadow: var(--ps-shadow-hover);
         transform: scale(1.01);
     }
+
+    /* --- PDF navigation bar --- */
+    .pdf-nav-bar {
+        background: #F1F5F9 !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        gap: 8px !important;
+    }
+    .pdf-nav-bar .gr-button, .pdf-nav-bar button {
+        min-width: auto !important;
+    }
+    .pdf-nav-bar input[type="number"] {
+        width: 60px !important;
+        text-align: center !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+    }
 """
 
 

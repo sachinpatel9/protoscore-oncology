@@ -12,6 +12,7 @@ Two modes:
 
 import os
 import io
+import time
 import traceback
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from ui.scorecard import (
 from ui.pdf_viewer import (
     render_pdf_page, build_provenance_panel,
     build_page_context_html, build_citation_nav_html,
+    build_pdf_placeholder_html,
 )
 from ui.verification import (
     build_verification_html, build_metric_row_html,
@@ -140,31 +142,49 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
     """
     Run the full extraction pipeline on an uploaded document.
 
-    Returns a tuple of display components for both the Assessment Dashboard
-    and the Batch Verification tab.
+    Generator that yields intermediate progress updates to the scorecard panel,
+    then yields the final result tuple with all display components.
     """
     use_ollama = llm_provider == "Ollama (Local)"
+    start_time = time.time()
 
-    # 12-element error tuple matching outputs
+    # Helper: build a 13-element tuple with progress in scorecard slot
+    placeholder_html = build_pdf_placeholder_html()
+
+    def _progress_tuple(step, fraction):
+        elapsed = time.time() - start_time
+        return (
+            gr.update(), gr.update(),                       # states
+            build_progress_html(step, fraction, elapsed),   # scorecard_html
+            gr.update(), gr.update(),                       # radar, formula
+            gr.update(), gr.update(),                       # pdf, error
+            gr.update(), gr.update(),                       # verif state, df
+            gr.update(), gr.update(), gr.update(),          # dashboards
+            placeholder_html,                               # pdf_empty_state
+        )
+
+    # 13-element error tuple matching outputs (includes pdf_empty_state)
     error_tuple = (
         None, None, "", None, "",
         None, "",
-        # Batch verification outputs
         None, pd.DataFrame(), "", "", "",
+        "",  # pdf_empty_state cleared on error
     )
 
     if not use_ollama:
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
-            return error_tuple[:6] + (
+            yield error_tuple[:6] + (
                 "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
             ) + error_tuple[7:]
+            return
 
     if use_ollama and not check_ollama_running():
-        return error_tuple[:6] + (
+        yield error_tuple[:6] + (
             "Ollama is not running. Install from [ollama.com](https://ollama.com), "
             "then run `ollama serve`.",
         ) + error_tuple[7:]
+        return
 
     try:
         file_bytes = Path(file_path).read_bytes()
@@ -173,6 +193,7 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         is_word = filename.lower().endswith((".docx", ".doc"))
 
         # Step 1: Parse document
+        yield _progress_tuple("Parsing document...", 0.10)
         progress(0.10, desc="Parsing document...")
         if is_word:
             parsed_doc = parse_protocol_docx(file_bytes)
@@ -188,6 +209,7 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             model, tier, rationale = recommend_model(installed)
 
             if model not in installed:
+                yield _progress_tuple(f"Pulling {model}...", 0.12)
                 progress(0.12, desc=f"Pulling {model} (best for your system)...")
                 success = pull_model(
                     model,
@@ -196,21 +218,24 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
                     ),
                 )
                 if not success:
-                    return error_tuple[:6] + (
+                    yield error_tuple[:6] + (
                         f"Failed to pull model `{model}`. "
                         f"Try manually: `ollama pull {model}`",
                     ) + error_tuple[7:]
+                    return
 
             pipeline = OllamaExtractionPipeline(model, parsed_doc)
         else:
             api_key = os.getenv("ANTHROPIC_API_KEY", "")
             pipeline = ExtractionPipeline(api_key, parsed_doc)
 
+        yield _progress_tuple("Running extraction pipeline...", 0.20)
         result = pipeline.run(progress_callback=progress_cb)
         result.source_filename = filename
         result.total_pages = parsed_doc.total_pages
 
         # Step 3: Resolve citation bounding boxes
+        yield _progress_tuple("Resolving source citations...", 0.95)
         progress(0.98, desc="Resolving source citations...")
         result = resolve_all_citations(result, parsed_doc)
 
@@ -218,10 +243,11 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         verif_state = init_verification_state(result.provenance)
 
         # Step 5: Score (initial, before user verification)
+        yield _progress_tuple("Calculating scores...", 0.97)
         score_result = calculate_pcs(result.protocol_data, DEFAULT_WEIGHTS)
         formula = format_score_formula(result.protocol_data, DEFAULT_WEIGHTS)
 
-        scorecard_html = render_scorecard(
+        scorecard_out = render_scorecard(
             score_result, result.protocol_data, formula, result.provenance,
             verif_state=verif_state,
         )
@@ -230,18 +256,18 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         # Amendment risk formula
         amendment_data = result.protocol_data.get("amendment_risk", {})
         amendment_formula = format_amendment_risk_formula(amendment_data) if amendment_data else None
-        formula_html = build_formula_display(formula)
+        formula_out = build_formula_display(formula)
         if amendment_formula:
-            formula_html += build_amendment_formula_display(amendment_formula)
+            formula_out += build_amendment_formula_display(amendment_formula)
 
         # Enrollment projection formula
         enrollment_data = result.protocol_data.get("enrollment_projection", {})
         if enrollment_data:
-            formula_html += build_enrollment_formula_display(enrollment_data)
+            formula_out += build_enrollment_formula_display(enrollment_data)
 
         # Enhanced Pillars A/B/C formula
         if any(result.protocol_data.get(k) for k in ("procedure_weight_summary", "burden_spikes", "population_impacts", "sequencing_risks")):
-            formula_html += build_enhancement_formula_display(result.protocol_data)
+            formula_out += build_enhancement_formula_display(result.protocol_data)
 
         # Render first PDF page
         page_img = None
@@ -255,12 +281,13 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 
         progress(1.0, desc="Extraction complete.")
 
-        return (
+        # Final yield — full results, clear pdf_empty_state
+        yield (
             result,                 # extraction state
             file_bytes,             # uploaded file bytes state
-            scorecard_html,         # scorecard
+            scorecard_out,          # scorecard
             radar_fig,              # radar chart
-            formula_html,           # formula display
+            formula_out,            # formula display
             page_img,               # first PDF page
             "",                     # no error
             # Batch verification outputs
@@ -269,11 +296,12 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             confidence_dashboard,   # confidence dashboard HTML
             review_gate,            # review gate HTML
             "",                     # inline evidence (empty initially)
+            "",                     # pdf_empty_state — cleared
         )
 
     except Exception as e:
         error_msg = f"Extraction failed: {str(e)}"
-        return error_tuple[:6] + (error_msg,) + error_tuple[7:]
+        yield error_tuple[:6] + (error_msg,) + error_tuple[7:]
 
 
 # ---------------------------------------------------------------------------
@@ -978,12 +1006,13 @@ def build_app():
 
                     # RIGHT: PDF Viewer
                     with gr.Column(scale=1):
+                        pdf_empty_state = gr.HTML(build_pdf_placeholder_html())
                         pdf_page_display = gr.Image(
                             label="Protocol PDF",
                             type="pil",
                             height=600,
                         )
-                        with gr.Row():
+                        with gr.Row(elem_classes=["pdf-nav-bar"]):
                             page_nav_prev = gr.Button("< Prev", size="sm", scale=1)
                             page_num_display = gr.Number(
                                 label="Page", value=1, minimum=1,
@@ -1173,6 +1202,7 @@ def build_app():
                 verification_state, verification_df,
                 confidence_dashboard_display, review_gate_display,
                 inline_evidence_html,
+                pdf_empty_state,
             ],
         ).then(
             # After extraction, populate the dashboard metric selector (UX-1.2)
