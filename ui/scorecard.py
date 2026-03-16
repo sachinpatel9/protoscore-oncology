@@ -13,9 +13,9 @@ import plotly.graph_objects as go
 
 def score_color(score: float) -> str:
     """Return color based on score severity."""
-    if score < 40:
+    if score < 30:
         return "#1A7A45"  # Green (low risk)
-    elif score < 70:
+    elif score <= 60:
         return "#E68A00"  # Amber (moderate risk)
     return "#C0392B"      # Red (high risk)
 
@@ -40,12 +40,13 @@ def build_hero_metric(score: float) -> str:
     """Build the hero PCS score display."""
     color = score_color(score)
     return f"""
-    <div style="text-align:center; padding:20px; background:#FFFFFF;
-                border-radius:12px; border:1px solid #E2E8F0;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+    <div style="text-align:center; padding:24px 20px; background:#0D1B2A;
+                border-radius:12px; border-left:4px solid #0E7C86;
+                min-height:120px; display:flex; flex-direction:column;
+                justify-content:center; align-items:center;">
+        <div style="font-size:13px; color:#94A3B8; text-transform:uppercase;
                     letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Protocol Complexity Score</div>
-        <div style="font-size:42px; font-weight:700; color:#0D1B2A;
+        <div style="font-size:56px; font-weight:700; color:#FFFFFF;
                     margin:10px 0; font-family:'Lora', Georgia, serif;">{score:.1f}</div>
         <div style="font-size:13px; color:#94A3B8;">/ 100</div>
     </div>
@@ -64,15 +65,15 @@ def build_metric_card(
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
-                border-left:4px solid {color}; border:1px solid #E2E8F0;
-                border-left:4px solid {color}; margin-bottom:12px;
+                border:1px solid #E2E8F0; border-left:3px solid {color};
+                margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:start;">
             <div style="font-size:11px; color:#64748B; font-weight:600;
                         text-transform:uppercase; letter-spacing:0.08em;
                         font-family:'Nunito Sans', sans-serif;">{title}</div>
         </div>
-        <div style="font-size:42px; font-weight:700; color:#0D1B2A;
+        <div style="font-size:32px; font-weight:700; color:#0D1B2A;
                     margin:4px 0; font-family:'Lora', Georgia, serif;">{score:.1f}</div>
         <div style="font-size:13px; color:#64748B;">{detail}</div>
         {conf_html}
@@ -155,19 +156,23 @@ def build_amendment_risk_card(amendment_data: dict) -> str:
     findings_html = ""
     for f in findings:
         findings_html += f"""
-        <div style="background:#F0F4F8; padding:10px; border-radius:8px;
-                    border-left:3px solid {_tier_color('high' if f.get('weight', 0) >= 0.7 else 'moderate' if f.get('weight', 0) >= 0.55 else 'low')};
-                    margin:6px 0; font-size:13px;">
-            <div style="color:#0D1B2A; font-weight:600;">{f.get('rule_id', '')} — {f.get('pattern', '')}</div>
-            <div style="color:#64748B; margin-top:4px; font-style:italic;">
-                &ldquo;{f.get('matched_text', '')[:120]}&rdquo;
-                {f' · Page {f["page_number"]}' if f.get('page_number') else ''}
+        <li style="margin:6px 0;">
+            <div style="background:#F0F4F8; padding:10px; border-radius:8px;
+                        border-left:3px solid {_tier_color('high' if f.get('weight', 0) >= 0.7 else 'moderate' if f.get('weight', 0) >= 0.55 else 'low')};
+                        font-size:13px;">
+                <div style="color:#0D1B2A; font-weight:600;">{f.get('rule_id', '')} — {f.get('pattern', '')}</div>
+                <div style="color:#64748B; margin-top:4px; font-style:italic;">
+                    &ldquo;{f.get('matched_text', '')[:120]}&rdquo;
+                    {f' · Page {f["page_number"]}' if f.get('page_number') else ''}
+                </div>
+                <div style="color:#0E7C86; margin-top:4px; font-size:12px;">
+                    &#x2192; {f.get('mitigation', '')}
+                </div>
             </div>
-            <div style="color:#0E7C86; margin-top:4px; font-size:12px;">
-                &#x2192; {f.get('mitigation', '')}
-            </div>
-        </div>
+        </li>
         """
+
+    findings_list = f'<ol style="margin:0; padding-left:20px; list-style-type:decimal; color:#64748B;">{findings_html}</ol>' if findings_html else '<div style="color:#94A3B8; font-size:13px;">No amendment risk patterns detected.</div>'
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
@@ -183,10 +188,10 @@ def build_amendment_risk_card(amendment_data: dict) -> str:
                 </div>
             </div>
             <div style="text-align:right;">
-                <div style="font-size:42px; font-weight:700; color:#0D1B2A;
+                <div style="font-size:32px; font-weight:700; color:#0D1B2A;
                             font-family:'Lora', Georgia, serif;">{score:.0f}</div>
-                <span style="background:{color}; color:white; padding:2px 10px;
-                             border-radius:10px; font-size:0.75em; font-weight:bold;">
+                <span style="background:{color}; color:white; padding:4px 14px;
+                             border-radius:20px; font-size:14px; font-weight:700;">
                     {tier} Risk
                 </span>
             </div>
@@ -195,7 +200,7 @@ def build_amendment_risk_card(amendment_data: dict) -> str:
                     text-transform:uppercase; letter-spacing:0.08em;">
             TOP FINDINGS
         </div>
-        {findings_html if findings_html else '<div style="color:#94A3B8; font-size:13px;">No amendment risk patterns detected.</div>'}
+        {findings_list}
     </div>
     """
 
@@ -241,13 +246,13 @@ def build_enrollment_card(enrollment_data: dict) -> str:
     refs = enrollment_data.get("reference_trials", [])
     restrictive = enrollment_data.get("top_restrictive_criteria", [])
 
-    # Color based on enrollment rate (higher = better)
+    # Color and tier label based on enrollment rate (higher = better)
     if rate >= 2.0:
-        rate_color = "#1A7A45"
+        rate_color, rate_tier = "#1A7A45", "Strong"
     elif rate >= 1.0:
-        rate_color = "#E68A00"
+        rate_color, rate_tier = "#E68A00", "Moderate"
     else:
-        rate_color = "#C0392B"
+        rate_color, rate_tier = "#C0392B", "Slow"
 
     # Reference trials
     refs_html = ""
@@ -290,10 +295,15 @@ def build_enrollment_card(enrollment_data: dict) -> str:
                 </div>
             </div>
             <div style="text-align:right;">
-                <div style="font-size:42px; font-weight:700; color:#0D1B2A;
+                <div style="font-size:32px; font-weight:700; color:#0D1B2A;
                             font-family:'Lora', Georgia, serif;">{rate}</div>
                 <div style="font-size:12px; color:#64748B;">pts/site/month</div>
-                <div style="font-size:11px; color:#94A3B8;">
+                <span style="background:{rate_color}; color:white; padding:4px 14px;
+                             border-radius:20px; font-size:14px; font-weight:700;
+                             display:inline-block; margin-top:4px;">
+                    {rate_tier}
+                </span>
+                <div style="font-size:11px; color:#94A3B8; margin-top:4px;">
                     80% CI: [{ci[0]}, {ci[1]}]
                 </div>
             </div>
