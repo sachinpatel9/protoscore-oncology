@@ -256,12 +256,25 @@ CUSTOM_CSS = """
         background: #0B6A73 !important;
     }
 
+    /* --- Simulator panel balance --- */
+    .sim-row > .column, .enroll-row > .column {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    }
+
     /* --- Simulator connector arrow --- */
     .sim-row { position: relative !important; }
     .sim-row::after {
-        content: "→"; position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
+        content: "→"; position: absolute; top: 120px; left: 50%;
+        transform: translateX(-50%);
         font-size: 28px; color: #CBD5E1; pointer-events: none; z-index: 1;
+    }
+
+    /* --- Radar chart label --- */
+    .radar-plot .label-wrap span {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
     }
 
     /* --- Card hover transitions --- */

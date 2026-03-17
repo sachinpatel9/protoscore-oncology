@@ -1019,7 +1019,7 @@ def build_app():
                     # LEFT: Scorecard
                     with gr.Column(scale=1):
                         scorecard_html = gr.HTML("")
-                        radar_chart = gr.Plot(label="Multi-Dimensional Risk")
+                        radar_chart = gr.Plot(label="Multi-Dimensional Risk", elem_classes=["radar-plot"])
                         formula_html = gr.HTML("")
 
                         # PDF Export (UX-3.1, UX-3.2)
@@ -1167,7 +1167,7 @@ def build_app():
                 gr.Markdown("### What-If Analysis")
                 gr.Markdown("Adjust protocol parameters to see the impact on complexity score.")
                 with gr.Row(elem_classes=["sim-row"]):
-                    with gr.Column():
+                    with gr.Column(scale=1):
                         sim_visits = gr.Slider(
                             minimum=1, maximum=50, value=18, step=1,
                             label="Total Visits",
@@ -1179,15 +1179,15 @@ def build_app():
                             elem_classes=["sim-slider"],
                         )
                         sim_btn = gr.Button("Simulate", variant="secondary", elem_classes=["sim-btn"])
-                    with gr.Column():
+                    with gr.Column(scale=2):
                         sim_result_html = gr.HTML("")
                         sim_chart = gr.Plot(label="Score Comparison")
 
                 gr.Markdown("---")
                 gr.Markdown("### Enrollment Timeline Calculator")
                 gr.Markdown("Estimate time to full enrollment based on your projected rate and site count")
-                with gr.Row():
-                    with gr.Column():
+                with gr.Row(elem_classes=["enroll-row"]):
+                    with gr.Column(scale=1):
                         enroll_sites = gr.Number(
                             label="Number of Sites", value=100,
                             minimum=1, interactive=True,
@@ -1197,7 +1197,7 @@ def build_app():
                             minimum=1, interactive=True,
                         )
                         enroll_btn = gr.Button("Calculate Timeline", variant="secondary", elem_classes=["enroll-btn"])
-                    with gr.Column():
+                    with gr.Column(scale=2):
                         enroll_result_html = gr.HTML("")
 
             # --- Tab 4: AI Insights ---
