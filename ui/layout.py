@@ -263,14 +263,6 @@ CUSTOM_CSS = """
         justify-content: center !important;
     }
 
-    /* --- Simulator connector arrow --- */
-    .sim-row { position: relative !important; }
-    .sim-row::after {
-        content: "→"; position: absolute; top: 120px; left: 50%;
-        transform: translateX(-50%);
-        font-size: 28px; color: #CBD5E1; pointer-events: none; z-index: 1;
-    }
-
     /* --- Radar chart label --- */
     .radar-plot .label-wrap span {
         color: #FFFFFF !important;
