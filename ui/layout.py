@@ -239,6 +239,31 @@ CUSTOM_CSS = """
         text-decoration: underline !important;
     }
 
+    /* --- Simulator slider styling --- */
+    .sim-slider input[type=range]::-webkit-slider-runnable-track { background: #E2E8F0 !important; }
+    .sim-slider input[type=range]::-webkit-slider-thumb { background: #0E7C86 !important; }
+    .sim-slider label span { font-size: 11px !important; text-transform: uppercase !important; color: #64748B !important; letter-spacing: 0.06em !important; }
+    .sim-slider .wrap { font-size: 16px !important; font-weight: 700 !important; color: #0D1B2A !important; }
+
+    /* --- Simulator buttons --- */
+    .sim-btn button, .enroll-btn button {
+        background: #0E7C86 !important; color: #FFFFFF !important;
+        border-radius: 6px !important; font-size: 14px !important;
+        font-weight: 700 !important; width: 100% !important;
+        border: none !important;
+    }
+    .sim-btn button:hover, .enroll-btn button:hover {
+        background: #0B6A73 !important;
+    }
+
+    /* --- Simulator connector arrow --- */
+    .sim-row { position: relative !important; }
+    .sim-row::after {
+        content: "→"; position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 28px; color: #CBD5E1; pointer-events: none; z-index: 1;
+    }
+
     /* --- Card hover transitions --- */
     .ps-card-hover {
         transition: box-shadow 0.2s ease, transform 0.2s ease;

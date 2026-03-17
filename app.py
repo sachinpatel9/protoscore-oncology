@@ -766,10 +766,12 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
     delta = round(new_score["total"] - original_score["total"], 1)
     delta_sign = "+" if delta > 0 else ""
     delta_color = "#C0392B" if delta > 0 else "#1A7A45" if delta < 0 else "#94A3B8"
+    sim_bg = "#FEF2F2" if delta > 0 else "#F0FDF4" if delta < 0 else "#F8FAFB"
+    sim_border = "#FECACA" if delta > 0 else "#BBF7D0" if delta < 0 else "#E2E8F0"
 
     html = f"""
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
-        <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
+        <div style="background:#F8FAFB; padding:20px; border-radius:12px; text-align:center;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
             <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Current Score</div>
             <div style="font-size:42px; font-weight:700; color:#0D1B2A;
@@ -777,14 +779,14 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
                 {original_score['total']:.1f}
             </div>
         </div>
-        <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+        <div style="background:{sim_bg}; padding:20px; border-radius:12px; text-align:center;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid {sim_border};">
             <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Simulated Score</div>
             <div style="font-size:42px; font-weight:700; color:{delta_color};
                         font-family:'Lora', Georgia, serif;">
                 {new_score['total']:.1f}
             </div>
-            <div style="font-size:1em; color:{delta_color};">
+            <div style="font-size:14px; font-weight:700; color:{delta_color};">
                 {delta_sign}{delta}
             </div>
         </div>
@@ -805,8 +807,17 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
         font=dict(color="#334155", family="Nunito Sans"),
         yaxis=dict(range=[0, 100], gridcolor="#E2E8F0"),
         height=300,
-        margin=dict(l=40, r=40, t=20, b=40),
+        margin=dict(l=40, r=40, t=40, b=40),
     )
+
+    if delta != 0:
+        delta_text = f"+{delta} complexity increase" if delta > 0 else f"{delta} complexity reduction"
+        fig.add_annotation(
+            x="Simulated", y=new_score["total"],
+            text=delta_text, showarrow=False,
+            font=dict(color=delta_color, size=13, family="Nunito Sans"),
+            yshift=15,
+        )
 
     return html, fig
 
@@ -858,11 +869,36 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
             months = float("inf")
             color = "#C0392B"
         months_str = f"{months:.1f}" if months != float("inf") else "N/A"
+
+        # Per-scenario row styling
+        if "Base Case" in label:
+            row_style = "background:#EFF6FF;"
+            td_style = "font-weight:700;"
+            label_color = "#0D1B2A"
+            rate_color = "#64748B"
+        elif "Pessimistic" in label:
+            row_style = ""
+            td_style = ""
+            label_color = "#C0392B"
+            rate_color = "#C0392B"
+            color = "#C0392B"
+        elif "Optimistic" in label:
+            row_style = ""
+            td_style = ""
+            label_color = "#1A7A45"
+            rate_color = "#1A7A45"
+            color = "#1A7A45"
+        else:
+            row_style = ""
+            td_style = ""
+            label_color = "#0D1B2A"
+            rate_color = "#64748B"
+
         rows_html += f"""
-        <tr>
-            <td style="padding:8px; color:#0D1B2A;">{label}</td>
-            <td style="padding:8px; color:#64748B; text-align:center;">{adj_rate:.2f}</td>
-            <td style="padding:8px; color:{color}; text-align:center; font-weight:600;">{months_str}</td>
+        <tr style="{row_style}">
+            <td style="padding:8px; color:{label_color}; {td_style}">{label}</td>
+            <td style="padding:8px; color:{rate_color}; text-align:center; {td_style}">{adj_rate:.2f}</td>
+            <td style="padding:8px; color:{color}; text-align:center; font-weight:600; {td_style}">{months_str}</td>
         </tr>
         """
 
@@ -891,8 +927,8 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
             </div>
         </div>
         <div style="font-size:11px; color:#64748B; margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">SENSITIVITY TABLE</div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.85em;">
-            <tr style="border-bottom:1px solid #E2E8F0;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.85em; border:1px solid #E2E8F0;">
+            <tr style="border-bottom:1px solid #E2E8F0; background:#F8FAFB;">
                 <th style="padding:8px; color:#64748B; text-align:left;">Scenario</th>
                 <th style="padding:8px; color:#64748B; text-align:center;">Rate (pts/site/mo)</th>
                 <th style="padding:8px; color:#64748B; text-align:center;">Months to Full</th>
@@ -1130,24 +1166,26 @@ def build_app():
             with gr.Tab("Optimization Simulator"):
                 gr.Markdown("### What-If Analysis")
                 gr.Markdown("Adjust protocol parameters to see the impact on complexity score.")
-                with gr.Row():
+                with gr.Row(elem_classes=["sim-row"]):
                     with gr.Column():
                         sim_visits = gr.Slider(
                             minimum=1, maximum=50, value=18, step=1,
                             label="Total Visits",
+                            elem_classes=["sim-slider"],
                         )
                         sim_biopsies = gr.Slider(
                             minimum=0, maximum=10, value=3, step=1,
                             label="Invasive Procedures (Biopsies)",
+                            elem_classes=["sim-slider"],
                         )
-                        sim_btn = gr.Button("Simulate", variant="secondary")
+                        sim_btn = gr.Button("Simulate", variant="secondary", elem_classes=["sim-btn"])
                     with gr.Column():
                         sim_result_html = gr.HTML("")
                         sim_chart = gr.Plot(label="Score Comparison")
 
                 gr.Markdown("---")
-                gr.Markdown("### Enrollment Timeline Calculator (FR-E6.4)")
-                gr.Markdown("Estimate time to full enrollment based on projected rate.")
+                gr.Markdown("### Enrollment Timeline Calculator")
+                gr.Markdown("Estimate time to full enrollment based on your projected rate and site count")
                 with gr.Row():
                     with gr.Column():
                         enroll_sites = gr.Number(
@@ -1158,7 +1196,7 @@ def build_app():
                             label="Target Enrollment (N)", value=500,
                             minimum=1, interactive=True,
                         )
-                        enroll_btn = gr.Button("Calculate Timeline", variant="secondary")
+                        enroll_btn = gr.Button("Calculate Timeline", variant="secondary", elem_classes=["enroll-btn"])
                     with gr.Column():
                         enroll_result_html = gr.HTML("")
 
