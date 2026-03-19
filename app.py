@@ -12,6 +12,7 @@ Two modes:
 
 import os
 import io
+import time
 import traceback
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from ui.scorecard import (
 from ui.pdf_viewer import (
     render_pdf_page, build_provenance_panel,
     build_page_context_html, build_citation_nav_html,
+    build_pdf_placeholder_html,
 )
 from ui.verification import (
     build_verification_html, build_metric_row_html,
@@ -112,9 +114,9 @@ def run_demo_analysis(protocol_id: str):
     insights_html = '<div style="padding:8px;">'
     for insight in insights:
         insights_html += f"""
-        <div style="background:#FFF8F0; padding:10px; border-radius:8px;
-                    border-left:3px solid #D4A04A; margin:8px 0;
-                    font-size:0.85em; color:#2C2C2C;">
+        <div style="background:#FFFBF0; padding:10px; border-radius:8px;
+                    border-left:3px solid #E68A00; margin:8px 0;
+                    font-size:13px; color:#0D1B2A;">
             {insight}
         </div>
         """
@@ -122,8 +124,8 @@ def run_demo_analysis(protocol_id: str):
 
     # Protocol info
     info_html = f"""
-    <div style="font-size:0.85em; color:#6B7280; padding:8px;">
-        <strong style="color:#2C2C2C;">{protocol['name']}</strong><br>
+    <div style="font-size:13px; color:#64748B; padding:8px;">
+        <strong style="color:#0D1B2A;">{protocol['name']}</strong><br>
         Phase {protocol['phase']} · {protocol.get('therapeutic_area', 'Oncology')}<br>
         {protocol.get('study_design', '')}
     </div>
@@ -140,31 +142,49 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
     """
     Run the full extraction pipeline on an uploaded document.
 
-    Returns a tuple of display components for both the Assessment Dashboard
-    and the Batch Verification tab.
+    Generator that yields intermediate progress updates to the scorecard panel,
+    then yields the final result tuple with all display components.
     """
     use_ollama = llm_provider == "Ollama (Local)"
+    start_time = time.time()
 
-    # 12-element error tuple matching outputs
+    # Helper: build a 13-element tuple with progress in scorecard slot
+    placeholder_html = build_pdf_placeholder_html()
+
+    def _progress_tuple(step, fraction):
+        elapsed = time.time() - start_time
+        return (
+            gr.update(), gr.update(),                       # states
+            build_progress_html(step, fraction, elapsed),   # scorecard_html
+            gr.update(), gr.update(),                       # radar, formula
+            gr.update(), gr.update(),                       # pdf, error
+            gr.update(), gr.update(),                       # verif state, df
+            gr.update(), gr.update(), gr.update(),          # dashboards
+            placeholder_html,                               # pdf_empty_state
+        )
+
+    # 13-element error tuple matching outputs (includes pdf_empty_state)
     error_tuple = (
         None, None, "", None, "",
         None, "",
-        # Batch verification outputs
         None, pd.DataFrame(), "", "", "",
+        "",  # pdf_empty_state cleared on error
     )
 
     if not use_ollama:
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
-            return error_tuple[:6] + (
+            yield error_tuple[:6] + (
                 "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
             ) + error_tuple[7:]
+            return
 
     if use_ollama and not check_ollama_running():
-        return error_tuple[:6] + (
+        yield error_tuple[:6] + (
             "Ollama is not running. Install from [ollama.com](https://ollama.com), "
             "then run `ollama serve`.",
         ) + error_tuple[7:]
+        return
 
     try:
         file_bytes = Path(file_path).read_bytes()
@@ -173,6 +193,7 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         is_word = filename.lower().endswith((".docx", ".doc"))
 
         # Step 1: Parse document
+        yield _progress_tuple("Parsing document...", 0.10)
         progress(0.10, desc="Parsing document...")
         if is_word:
             parsed_doc = parse_protocol_docx(file_bytes)
@@ -188,6 +209,7 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             model, tier, rationale = recommend_model(installed)
 
             if model not in installed:
+                yield _progress_tuple(f"Pulling {model}...", 0.12)
                 progress(0.12, desc=f"Pulling {model} (best for your system)...")
                 success = pull_model(
                     model,
@@ -196,21 +218,24 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
                     ),
                 )
                 if not success:
-                    return error_tuple[:6] + (
+                    yield error_tuple[:6] + (
                         f"Failed to pull model `{model}`. "
                         f"Try manually: `ollama pull {model}`",
                     ) + error_tuple[7:]
+                    return
 
             pipeline = OllamaExtractionPipeline(model, parsed_doc)
         else:
             api_key = os.getenv("ANTHROPIC_API_KEY", "")
             pipeline = ExtractionPipeline(api_key, parsed_doc)
 
+        yield _progress_tuple("Running extraction pipeline...", 0.20)
         result = pipeline.run(progress_callback=progress_cb)
         result.source_filename = filename
         result.total_pages = parsed_doc.total_pages
 
         # Step 3: Resolve citation bounding boxes
+        yield _progress_tuple("Resolving source citations...", 0.95)
         progress(0.98, desc="Resolving source citations...")
         result = resolve_all_citations(result, parsed_doc)
 
@@ -218,10 +243,11 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         verif_state = init_verification_state(result.provenance)
 
         # Step 5: Score (initial, before user verification)
+        yield _progress_tuple("Calculating scores...", 0.97)
         score_result = calculate_pcs(result.protocol_data, DEFAULT_WEIGHTS)
         formula = format_score_formula(result.protocol_data, DEFAULT_WEIGHTS)
 
-        scorecard_html = render_scorecard(
+        scorecard_out = render_scorecard(
             score_result, result.protocol_data, formula, result.provenance,
             verif_state=verif_state,
         )
@@ -230,18 +256,18 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         # Amendment risk formula
         amendment_data = result.protocol_data.get("amendment_risk", {})
         amendment_formula = format_amendment_risk_formula(amendment_data) if amendment_data else None
-        formula_html = build_formula_display(formula)
+        formula_out = build_formula_display(formula)
         if amendment_formula:
-            formula_html += build_amendment_formula_display(amendment_formula)
+            formula_out += build_amendment_formula_display(amendment_formula)
 
         # Enrollment projection formula
         enrollment_data = result.protocol_data.get("enrollment_projection", {})
         if enrollment_data:
-            formula_html += build_enrollment_formula_display(enrollment_data)
+            formula_out += build_enrollment_formula_display(enrollment_data)
 
         # Enhanced Pillars A/B/C formula
         if any(result.protocol_data.get(k) for k in ("procedure_weight_summary", "burden_spikes", "population_impacts", "sequencing_risks")):
-            formula_html += build_enhancement_formula_display(result.protocol_data)
+            formula_out += build_enhancement_formula_display(result.protocol_data)
 
         # Render first PDF page
         page_img = None
@@ -255,12 +281,13 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 
         progress(1.0, desc="Extraction complete.")
 
-        return (
+        # Final yield — full results, clear pdf_empty_state
+        yield (
             result,                 # extraction state
             file_bytes,             # uploaded file bytes state
-            scorecard_html,         # scorecard
+            scorecard_out,          # scorecard
             radar_fig,              # radar chart
-            formula_html,           # formula display
+            formula_out,            # formula display
             page_img,               # first PDF page
             "",                     # no error
             # Batch verification outputs
@@ -269,11 +296,12 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             confidence_dashboard,   # confidence dashboard HTML
             review_gate,            # review gate HTML
             "",                     # inline evidence (empty initially)
+            "",                     # pdf_empty_state — cleared
         )
 
     except Exception as e:
         error_msg = f"Extraction failed: {str(e)}"
-        return error_tuple[:6] + (error_msg,) + error_tuple[7:]
+        yield error_tuple[:6] + (error_msg,) + error_tuple[7:]
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +316,7 @@ def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
     Returns: (inline_evidence_html, evidence_thumbnail_image)
     """
     empty = (
-        '<div style="color:#9CA3AF; padding:20px;">Select a row to see source evidence.</div>',
+        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>',
         None,
     )
 
@@ -445,9 +473,9 @@ def on_confirm_and_score(result_state, verif_state):
     is_satisfied, message = get_review_gate_status(verif_state)
     if not is_satisfied:
         gate_html = f"""
-        <div style="background:#FFF5F5; padding:12px 16px; border-radius:8px;
-                    border:1px solid #C0755B; margin-bottom:8px;">
-            <span style="color:#C0755B; font-weight:600; font-size:0.85em;">
+        <div style="background:#FEF2F2; padding:12px 16px; border-radius:8px;
+                    border:1px solid #C0392B; margin-bottom:8px;">
+            <span style="color:#C0392B; font-weight:600; font-size:13px;">
                 &#10007; Cannot score yet: {message}
             </span>
         </div>
@@ -562,11 +590,11 @@ def on_export_pdf(result_state, verif_state, demo_selector_value, mode_value):
 def view_source(result_state, metric_key, file_bytes_state):
     """Show provenance panel and highlighted PDF page for a metric."""
     if result_state is None or not isinstance(result_state, ExtractionResult):
-        return "<div style='color:#9CA3AF; padding:8px;'>No extraction data available.</div>", None
+        return "<div style='color:#94A3B8; padding:8px;'>No extraction data available.</div>", None
 
     record = result_state.provenance.get(metric_key)
     if not record:
-        return "<div style='color:#9CA3AF; padding:8px;'>No provenance for this metric.</div>", None
+        return "<div style='color:#94A3B8; padding:8px;'>No provenance for this metric.</div>", None
 
     provenance_html = build_provenance_panel(record)
 
@@ -602,7 +630,7 @@ def navigate_to_metric(result_state, metric_key, file_bytes_state):
     record = result_state.provenance.get(metric_key)
     if not record or not record.citations:
         no_data = (
-            '<div style="color:#9CA3AF; font-size:0.85em; padding:8px;">'
+            '<div style="color:#94A3B8; font-size:13px; padding:8px;">'
             f'No source citations for "{metric_key}".</div>'
         )
         return (None, 1, "", "", no_data, 0)
@@ -737,26 +765,28 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
 
     delta = round(new_score["total"] - original_score["total"], 1)
     delta_sign = "+" if delta > 0 else ""
-    delta_color = "#C0755B" if delta > 0 else "#5B7B6F" if delta < 0 else "#9CA3AF"
+    delta_color = "#C0392B" if delta > 0 else "#1A7A45" if delta < 0 else "#94A3B8"
+    sim_bg = "#FEF2F2" if delta > 0 else "#F0FDF4" if delta < 0 else "#F8FAFB"
+    sim_border = "#FECACA" if delta > 0 else "#BBF7D0" if delta < 0 else "#E2E8F0"
 
     html = f"""
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
-        <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-            <div style="color:#6B7280; font-size:0.85em; font-family:'Nunito Sans', sans-serif;">Current Score</div>
-            <div style="font-size:2.5em; font-weight:700; color:#5B7B6F;
+        <div style="background:#F8FAFB; padding:20px; border-radius:12px; text-align:center;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+            <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Current Score</div>
+            <div style="font-size:42px; font-weight:700; color:#0D1B2A;
                         font-family:'Lora', Georgia, serif;">
                 {original_score['total']:.1f}
             </div>
         </div>
-        <div style="background:#FFFFFF; padding:20px; border-radius:12px; text-align:center;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-            <div style="color:#6B7280; font-size:0.85em; font-family:'Nunito Sans', sans-serif;">Simulated Score</div>
-            <div style="font-size:2.5em; font-weight:700; color:{delta_color};
+        <div style="background:{sim_bg}; padding:20px; border-radius:12px; text-align:center;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid {sim_border};">
+            <div style="color:#64748B; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-family:'Nunito Sans', sans-serif;">Simulated Score</div>
+            <div style="font-size:42px; font-weight:700; color:{delta_color};
                         font-family:'Lora', Georgia, serif;">
                 {new_score['total']:.1f}
             </div>
-            <div style="font-size:1em; color:{delta_color};">
+            <div style="font-size:14px; font-weight:700; color:{delta_color};">
                 {delta_sign}{delta}
             </div>
         </div>
@@ -767,18 +797,27 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
     fig.add_trace(go.Bar(
         x=["Current", "Simulated"],
         y=[original_score["total"], new_score["total"]],
-        marker_color=["#5B7B6F", delta_color],
+        marker_color=["#0E7C86", delta_color],
         text=[f"{original_score['total']:.1f}", f"{new_score['total']:.1f}"],
         textposition="auto",
     ))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#4B5563", family="Nunito Sans"),
-        yaxis=dict(range=[0, 100], gridcolor="#E5E0D8"),
+        font=dict(color="#334155", family="Nunito Sans"),
+        yaxis=dict(range=[0, 100], gridcolor="#E2E8F0"),
         height=300,
-        margin=dict(l=40, r=40, t=20, b=40),
+        margin=dict(l=40, r=40, t=40, b=40),
     )
+
+    if delta != 0:
+        delta_text = f"+{delta} complexity increase" if delta > 0 else f"{delta} complexity reduction"
+        fig.add_annotation(
+            x="Simulated", y=new_score["total"],
+            text=delta_text, showarrow=False,
+            font=dict(color=delta_color, size=13, family="Nunito Sans"),
+            yshift=15,
+        )
 
     return html, fig
 
@@ -789,7 +828,7 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     target_n = int(target_n)
 
     if num_sites <= 0 or target_n <= 0:
-        return '<div style="color:#9CA3AF; padding:8px;">Enter valid number of sites and target enrollment.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">Enter valid number of sites and target enrollment.</div>'
 
     # Get enrollment rate from current context
     enrollment_data = None
@@ -801,13 +840,13 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
         enrollment_data = protocol.get("enrollment_projection", {})
 
     if not enrollment_data:
-        return '<div style="color:#9CA3AF; padding:8px;">No enrollment projection available. Analyze a protocol first.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">No enrollment projection available. Analyze a protocol first.</div>'
 
     rate = enrollment_data.get("rate_per_site_per_month", 0)
     ci = enrollment_data.get("confidence_interval_80", [0, 0])
 
     if rate <= 0:
-        return '<div style="color:#9CA3AF; padding:8px;">Enrollment rate is zero. Cannot calculate timeline.</div>'
+        return '<div style="color:#94A3B8; padding:8px;">Enrollment rate is zero. Cannot calculate timeline.</div>'
 
     # Base estimate
     base_months = target_n / (rate * num_sites)
@@ -825,53 +864,78 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     for label, adj_rate in scenarios:
         if adj_rate > 0:
             months = target_n / (adj_rate * num_sites)
-            color = "#5B7B6F" if months <= 18 else "#D4A04A" if months <= 30 else "#C0755B"
+            color = "#1A7A45" if months <= 18 else "#E68A00" if months <= 30 else "#C0392B"
         else:
             months = float("inf")
-            color = "#C0755B"
+            color = "#C0392B"
         months_str = f"{months:.1f}" if months != float("inf") else "N/A"
+
+        # Per-scenario row styling
+        if "Base Case" in label:
+            row_style = "background:#EFF6FF;"
+            td_style = "font-weight:700;"
+            label_color = "#0D1B2A"
+            rate_color = "#64748B"
+        elif "Pessimistic" in label:
+            row_style = ""
+            td_style = ""
+            label_color = "#C0392B"
+            rate_color = "#C0392B"
+            color = "#C0392B"
+        elif "Optimistic" in label:
+            row_style = ""
+            td_style = ""
+            label_color = "#1A7A45"
+            rate_color = "#1A7A45"
+            color = "#1A7A45"
+        else:
+            row_style = ""
+            td_style = ""
+            label_color = "#0D1B2A"
+            rate_color = "#64748B"
+
         rows_html += f"""
-        <tr>
-            <td style="padding:8px; color:#2C2C2C;">{label}</td>
-            <td style="padding:8px; color:#6B7280; text-align:center;">{adj_rate:.2f}</td>
-            <td style="padding:8px; color:{color}; text-align:center; font-weight:600;">{months_str}</td>
+        <tr style="{row_style}">
+            <td style="padding:8px; color:{label_color}; {td_style}">{label}</td>
+            <td style="padding:8px; color:{rate_color}; text-align:center; {td_style}">{adj_rate:.2f}</td>
+            <td style="padding:8px; color:{color}; text-align:center; font-weight:600; {td_style}">{months_str}</td>
         </tr>
         """
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px; margin-top:8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E5E0D8;">
-        <div style="font-size:0.85em; color:#6B7280; font-weight:600; text-transform:uppercase;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06); border:1px solid #E2E8F0;">
+        <div style="font-size:11px; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
                     letter-spacing:1px; margin-bottom:12px;
                     font-family:'Nunito Sans', sans-serif;">Time-to-Full-Enrollment Estimate</div>
         <div style="display:flex; justify-content:space-around; margin-bottom:16px;">
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Projected Rate</div>
-                <div style="font-size:1.6em; font-weight:700; color:#5B7B6F;
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Projected Rate</div>
+                <div style="font-size:1.6em; font-weight:700; color:#0E7C86;
                             font-family:'Lora', Georgia, serif;">{rate}</div>
-                <div style="font-size:0.7em; color:#9CA3AF;">pts/site/month</div>
+                <div style="font-size:11px; color:#94A3B8;">pts/site/month</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Sites × Target</div>
-                <div style="font-size:1.6em; font-weight:700; color:#2C2C2C;">{num_sites} × {target_n}</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Sites × Target</div>
+                <div style="font-size:1.6em; font-weight:700; color:#0D1B2A;">{num_sites} × {target_n}</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#6B7280;">Est. Duration</div>
-                <div style="font-size:1.6em; font-weight:700; color:{'#5B7B6F' if base_months <= 18 else '#D4A04A' if base_months <= 30 else '#C0755B'};
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.08em;">Est. Duration</div>
+                <div style="font-size:1.6em; font-weight:700; color:{'#1A7A45' if base_months <= 18 else '#E68A00' if base_months <= 30 else '#C0392B'};
                             font-family:'Lora', Georgia, serif;">{base_months:.1f}</div>
-                <div style="font-size:0.7em; color:#9CA3AF;">months</div>
+                <div style="font-size:11px; color:#94A3B8;">months</div>
             </div>
         </div>
-        <div style="font-size:0.8em; color:#6B7280; margin-bottom:6px; font-weight:600;">SENSITIVITY TABLE</div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.85em;">
-            <tr style="border-bottom:1px solid #E5E0D8;">
-                <th style="padding:8px; color:#6B7280; text-align:left;">Scenario</th>
-                <th style="padding:8px; color:#6B7280; text-align:center;">Rate (pts/site/mo)</th>
-                <th style="padding:8px; color:#6B7280; text-align:center;">Months to Full</th>
+        <div style="font-size:11px; color:#64748B; margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;">SENSITIVITY TABLE</div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.85em; border:1px solid #E2E8F0;">
+            <tr style="border-bottom:1px solid #E2E8F0; background:#F8FAFB;">
+                <th style="padding:8px; color:#64748B; text-align:left;">Scenario</th>
+                <th style="padding:8px; color:#64748B; text-align:center;">Rate (pts/site/mo)</th>
+                <th style="padding:8px; color:#64748B; text-align:center;">Months to Full</th>
             </tr>
             {rows_html}
         </table>
-        <div style="font-size:0.7em; color:#9CA3AF; margin-top:8px; font-style:italic;">
+        <div style="font-size:11px; color:#94A3B8; margin-top:8px; font-style:italic;">
             Formula: months = target_N / (rate × num_sites)
         </div>
     </div>
@@ -902,6 +966,7 @@ def build_app():
             value="Demo Protocols",
             label="Mode",
             interactive=True,
+            elem_classes=["mode-toggle"],
         )
 
         # =================================================================
@@ -920,6 +985,7 @@ def build_app():
                     label="LLM Provider",
                     interactive=True,
                     scale=1,
+                    elem_classes=["llm-selector"],
                 )
                 analyze_btn = gr.Button(
                     "Analyze Protocol",
@@ -953,7 +1019,7 @@ def build_app():
                     # LEFT: Scorecard
                     with gr.Column(scale=1):
                         scorecard_html = gr.HTML("")
-                        radar_chart = gr.Plot(label="Multi-Dimensional Risk")
+                        radar_chart = gr.Plot(label="Multi-Dimensional Risk", elem_classes=["radar-plot"])
                         formula_html = gr.HTML("")
 
                         # PDF Export (UX-3.1, UX-3.2)
@@ -978,12 +1044,13 @@ def build_app():
 
                     # RIGHT: PDF Viewer
                     with gr.Column(scale=1):
+                        pdf_empty_state = gr.HTML(build_pdf_placeholder_html())
                         pdf_page_display = gr.Image(
                             label="Protocol PDF",
                             type="pil",
                             height=600,
                         )
-                        with gr.Row():
+                        with gr.Row(elem_classes=["pdf-nav-bar"]):
                             page_nav_prev = gr.Button("< Prev", size="sm", scale=1)
                             page_num_display = gr.Number(
                                 label="Page", value=1, minimum=1,
@@ -1027,6 +1094,7 @@ def build_app():
                             "Bulk Approve High-Confidence Fields (\u2265 0.85)",
                             variant="secondary",
                             size="sm",
+                            elem_classes=["bulk-approve-btn"],
                         )
 
                         # Main batch review dataframe
@@ -1050,12 +1118,14 @@ def build_app():
                                 variant="secondary",
                                 size="sm",
                                 scale=1,
+                                elem_classes=["confirm-field-btn"],
                             )
                             confirm_score_btn = gr.Button(
                                 "Confirm & Score",
                                 variant="primary",
                                 size="lg",
                                 scale=2,
+                                elem_classes=["confirm-score-btn"],
                             )
 
                         # Audit log export (FR-4.4)
@@ -1064,6 +1134,7 @@ def build_app():
                                 "Export Audit Log (JSON)",
                                 variant="secondary",
                                 size="sm",
+                                elem_classes=["export-audit-btn"],
                             )
                             audit_download = gr.File(
                                 label="Audit Log Download",
@@ -1074,12 +1145,19 @@ def build_app():
                     with gr.Column(scale=2):
                         gr.Markdown("### Source Evidence")
                         inline_evidence_html = gr.HTML(
-                            '<div style="color:#9CA3AF; padding:20px;">'
-                            'Click a row in the table to see source evidence, '
-                            'including the PDF page and AI reasoning.</div>'
+                            '<div style="display:flex; flex-direction:column; align-items:center; '
+                            'justify-content:center; min-height:300px; padding:40px 20px;">'
+                            '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" '
+                            'xmlns="http://www.w3.org/2000/svg">'
+                            '<path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 '
+                            '20 21.1 20 20V8L14 2Z" fill="#CBD5E1"/>'
+                            '<path d="M14 2V8H20" fill="#94A3B8"/></svg>'
+                            '<div style="font-size:13px; color:#94A3B8; margin-top:12px; '
+                            'text-align:center; font-family:\'Nunito Sans\', sans-serif;">'
+                            'Click any row to view source evidence</div></div>'
                         )
                         evidence_thumbnail = gr.Image(
-                            label="Source PDF Page",
+                            label="Jump to Source in PDF →",
                             type="pil",
                             height=400,
                         )
@@ -1088,26 +1166,28 @@ def build_app():
             with gr.Tab("Optimization Simulator"):
                 gr.Markdown("### What-If Analysis")
                 gr.Markdown("Adjust protocol parameters to see the impact on complexity score.")
-                with gr.Row():
-                    with gr.Column():
+                with gr.Row(elem_classes=["sim-row"]):
+                    with gr.Column(scale=1):
                         sim_visits = gr.Slider(
                             minimum=1, maximum=50, value=18, step=1,
                             label="Total Visits",
+                            elem_classes=["sim-slider"],
                         )
                         sim_biopsies = gr.Slider(
                             minimum=0, maximum=10, value=3, step=1,
                             label="Invasive Procedures (Biopsies)",
+                            elem_classes=["sim-slider"],
                         )
-                        sim_btn = gr.Button("Simulate", variant="secondary")
-                    with gr.Column():
+                        sim_btn = gr.Button("Simulate", variant="secondary", elem_classes=["sim-btn"])
+                    with gr.Column(scale=2):
                         sim_result_html = gr.HTML("")
                         sim_chart = gr.Plot(label="Score Comparison")
 
                 gr.Markdown("---")
-                gr.Markdown("### Enrollment Timeline Calculator (FR-E6.4)")
-                gr.Markdown("Estimate time to full enrollment based on projected rate.")
-                with gr.Row():
-                    with gr.Column():
+                gr.Markdown("### Enrollment Timeline Calculator")
+                gr.Markdown("Estimate time to full enrollment based on your projected rate and site count")
+                with gr.Row(elem_classes=["enroll-row"]):
+                    with gr.Column(scale=1):
                         enroll_sites = gr.Number(
                             label="Number of Sites", value=100,
                             minimum=1, interactive=True,
@@ -1116,14 +1196,14 @@ def build_app():
                             label="Target Enrollment (N)", value=500,
                             minimum=1, interactive=True,
                         )
-                        enroll_btn = gr.Button("Calculate Timeline", variant="secondary")
-                    with gr.Column():
+                        enroll_btn = gr.Button("Calculate Timeline", variant="secondary", elem_classes=["enroll-btn"])
+                    with gr.Column(scale=2):
                         enroll_result_html = gr.HTML("")
 
             # --- Tab 4: AI Insights ---
             with gr.Tab("AI Insights"):
                 insights_html = gr.HTML(
-                    '<div style="color:#9CA3AF; padding:20px;">Select a protocol to see insights.</div>'
+                    '<div style="color:#94A3B8; padding:20px;">Select a protocol to see insights.</div>'
                 )
 
         # =================================================================
@@ -1173,6 +1253,7 @@ def build_app():
                 verification_state, verification_df,
                 confidence_dashboard_display, review_gate_display,
                 inline_evidence_html,
+                pdf_empty_state,
             ],
         ).then(
             # After extraction, populate the dashboard metric selector (UX-1.2)

@@ -8,7 +8,7 @@ UX-2.2: Inline source evidence with PDF thumbnails per row.
 FR-4.4: Audit log integration for every correction/confirmation.
 FR-4.5: Confidence dashboard / Score Reliability indicator.
 
-Design: Warm Clinical / Organic Modern
+Design: Clinical Design System
 """
 
 import base64
@@ -182,19 +182,19 @@ def build_inline_evidence_html(
     # Confidence badge
     conf = record.confidence_score
     if conf >= 0.85:
-        badge_color, badge_label = "#5B7B6F", "HIGH"
+        badge_color, badge_label = "#1A7A45", "HIGH"
     elif conf >= 0.80:
-        badge_color, badge_label = "#7A9E8E", "OK"
+        badge_color, badge_label = "#3A9CA5", "OK"
     elif conf >= 0.60:
-        badge_color, badge_label = "#D4A04A", "MEDIUM"
+        badge_color, badge_label = "#E68A00", "MEDIUM"
     else:
-        badge_color, badge_label = "#C0755B", "LOW"
+        badge_color, badge_label = "#C0392B", "LOW"
 
     needs_review_html = ""
     if record.needs_review:
         needs_review_html = (
-            '<div style="background:#C0755B; color:white; padding:4px 12px; '
-            'border-radius:8px; font-size:0.8em; font-weight:bold; '
+            '<div style="background:#C0392B; color:white; padding:4px 12px; '
+            'border-radius:8px; font-size:13px; font-weight:bold; '
             'margin-top:8px; display:inline-block;">'
             'NEEDS REVIEW (confidence &lt; 0.80)</div>'
         )
@@ -206,17 +206,20 @@ def build_inline_evidence_html(
         section = " > ".join(citation.section_path) if citation.section_path else ""
 
         quotes_html += f"""
-        <div style="background:#F0EDE6; padding:10px; border-radius:6px;
-                    border-left:3px solid #5B7B6F; margin:6px 0;">
-            <div style="font-size:0.7em; color:#9CA3AF; margin-bottom:4px;
+        <div style="margin:6px 0;">
+            <div style="font-size:11px; color:#94A3B8; margin-bottom:4px;
+                        letter-spacing:0.08em; text-transform:uppercase;
                         font-family:'Nunito Sans', sans-serif;">
                 Citation {i + 1} · Page {citation.page_number} · {source_type}
                 {f' · {section}' if section else ''}
             </div>
-            <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:0.8em; color:#2C2C2C;
-                        white-space:pre-wrap; max-height:150px; overflow-y:auto;">
+            <blockquote style="border-left:3px solid #0E7C86; background:#F0F9FA;
+                               padding:12px; margin:0; border-radius:0 6px 6px 0;
+                               font-size:13px; font-family:'JetBrains Mono', 'Fira Code', monospace;
+                               color:#0D1B2A; white-space:pre-wrap; max-height:150px;
+                               overflow-y:auto;">
 {citation.quote}
-            </div>
+            </blockquote>
         </div>
         """
 
@@ -224,9 +227,9 @@ def build_inline_evidence_html(
     reasoning_html = ""
     if record.reasoning:
         reasoning_html = f"""
-        <div style="background:#F0EDE6; padding:10px; border-radius:6px;
-                    margin:8px 0; font-size:0.8em; color:#6B7280;">
-            <strong style="color:#5B7B6F;">AI Reasoning:</strong> {record.reasoning}
+        <div style="background:#EDF2F7; padding:10px; border-radius:6px;
+                    margin:8px 0; font-size:13px; color:#64748B;">
+            <strong style="color:#0E7C86;">AI Reasoning:</strong> {record.reasoning}
         </div>
         """
 
@@ -235,20 +238,21 @@ def build_inline_evidence_html(
     if thumbnail_b64:
         thumbnail_html = f"""
         <div style="margin-top:10px;">
-            <div style="font-size:0.75em; color:#9CA3AF; margin-bottom:4px;">
-                PDF Source Page Preview
+            <div style="margin-bottom:6px;">
+                <span style="color:#0E7C86; font-size:13px; font-weight:600;
+                             cursor:pointer;">Jump to Source in PDF &#x2192;</span>
             </div>
             <img src="data:image/png;base64,{thumbnail_b64}"
-                 style="max-width:100%; border:1px solid #E5E0D8; border-radius:6px;"
+                 style="max-width:100%; border:1px solid #E2E8F0; border-radius:6px;"
                  alt="Source page thumbnail" />
         </div>
         """
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
-                border:1px solid #E5E0D8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                border:1px solid #E2E8F0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-size:1.1em; font-weight:600; color:#2C2C2C;
+            <div style="font-size:1.1em; font-weight:600; color:#0D1B2A;
                         font-family:'Nunito Sans', sans-serif;">
                 {record.display_label}
             </div>
@@ -260,7 +264,7 @@ def build_inline_evidence_html(
             </div>
         </div>
 
-        <div style="font-size:1.4em; font-weight:700; color:#5B7B6F; margin:8px 0;
+        <div style="font-size:1.4em; font-weight:700; color:#0E7C86; margin:8px 0;
                     font-family:'Lora', Georgia, serif;">
             {record.value}
         </div>
@@ -268,9 +272,10 @@ def build_inline_evidence_html(
         {needs_review_html}
         {reasoning_html}
 
-        <div style="font-size:0.8em; color:#6B7280; margin-top:10px; margin-bottom:4px;
-                    font-weight:600; font-family:'Nunito Sans', sans-serif;">SOURCE EVIDENCE</div>
-        {quotes_html if quotes_html else '<div style="color:#9CA3AF; font-size:0.8em;">No source citations available.</div>'}
+        <div style="font-size:11px; color:#64748B; margin-top:10px; margin-bottom:4px;
+                    font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+                    font-family:'Nunito Sans', sans-serif;">SOURCE EVIDENCE</div>
+        {quotes_html if quotes_html else '<div style="color:#94A3B8; font-size:13px;">No source citations available.</div>'}
 
         {thumbnail_html}
     </div>
@@ -303,50 +308,74 @@ def build_confidence_dashboard_html(verif_state: dict | None) -> str:
 
     # Determine grade
     if verified_pct == 100:
-        grade, grade_color = "A", "#5B7B6F"
+        grade, grade_color = "A", "#1A7A45"
     elif verified_pct >= 80:
-        grade, grade_color = "B", "#7A9E8E"
+        grade, grade_color = "B", "#3A9CA5"
     elif verified_pct >= 50:
-        grade, grade_color = "C", "#D4A04A"
+        grade, grade_color = "C", "#E68A00"
     else:
-        grade, grade_color = "D", "#C0755B"
+        grade, grade_color = "D", "#C0392B"
 
     # Calculate bar widths (stacked, total = 100%)
     verified_bar = min(verified_pct, 100)
-    pending_bar = min(pending_pct, 100 - verified_bar)
+    highconf_bar = max(0, min(high_pct - verified_pct, 100 - verified_bar))
+    pending_bar = min(pending_pct, 100 - verified_bar - highconf_bar)
+
+    corrections_col = ""
+    if corrections > 0:
+        corrections_col = f"""
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{corrections}</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Corrections</div>
+            </div>
+        """
 
     return f"""
-    <div style="background:#FFFFFF; padding:12px 16px; border-radius:12px;
-                border:1px solid {grade_color}; margin-bottom:12px;
+    <div style="background:#FFFFFF; padding:16px; border-radius:12px;
+                border:1px solid #E2E8F0; margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <span style="font-size:0.85em; color:#6B7280; text-transform:uppercase;
-                            letter-spacing:1px; font-weight:600;
+                <span style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.08em; font-weight:600;
                             font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
-                <span style="font-size:0.7em; color:#9CA3AF; margin-left:8px;">
+                <span style="font-size:11px; color:#94A3B8; margin-left:8px;">
                     {stats['total']} fields total
                 </span>
             </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="font-size:1.8em; font-weight:800; color:{grade_color};
-                            font-family:'Lora', Georgia, serif;">{grade}</span>
-            </div>
+            <span style="background:{grade_color}; color:white; padding:6px 18px;
+                         border-radius:20px; font-size:20px; font-weight:800;
+                         font-family:'Lora', Georgia, serif;">{grade}</span>
         </div>
 
         <div style="display:flex; height:8px; border-radius:4px; overflow:hidden;
-                    margin:10px 0 6px 0; background:#E5E0D8;">
-            <div style="width:{verified_bar}%; background:#5B7B6F;"
+                    margin:12px 0 10px 0; background:#E2E8F0;">
+            <div style="width:{verified_bar}%; background:#1A7A45;"
                  title="Verified: {verified_pct}%"></div>
-            <div style="width:{pending_bar}%; background:#D4A04A;"
+            <div style="width:{highconf_bar}%; background:#0E7C86;"
+                 title="High Confidence: {high_pct}%"></div>
+            <div style="width:{pending_bar}%; background:#E68A00;"
                  title="Pending: {pending_pct}%"></div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; font-size:0.7em; color:#9CA3AF;">
-            <span style="color:#5B7B6F;">Verified: {verified_pct}%</span>
-            <span>High Conf (&#8805;85%): {high_pct}%</span>
-            <span style="color:#D4A04A;">Pending: {pending_pct}%</span>
-            {f'<span style="color:#5B7B6F;">Corrections: {corrections}</span>' if corrections > 0 else ''}
+        <div style="display:flex; justify-content:space-around; text-align:center;">
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#1A7A45;">{verified_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Verified</div>
+            </div>
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{high_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">High Conf &#8805;85%</div>
+            </div>
+            <div>
+                <div style="font-size:20px; font-weight:700; color:#E68A00;">{pending_pct}%</div>
+                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
+                            letter-spacing:0.06em;">Pending</div>
+            </div>
+            {corrections_col}
         </div>
     </div>
     """
@@ -371,9 +400,9 @@ def build_review_gate_html(verif_state: dict | None) -> str:
 
     if is_satisfied:
         return f"""
-        <div style="background:#F0F8F0; padding:10px 16px; border-radius:8px;
-                    border:1px solid #5B7B6F; margin-bottom:8px;">
-            <span style="color:#5B7B6F; font-weight:600; font-size:0.85em;
+        <div style="background:#F0FDF4; padding:10px 16px; border-radius:8px;
+                    border:1px solid #1A7A45; margin-bottom:8px;">
+            <span style="color:#1A7A45; font-weight:600; font-size:13px;
                         font-family:'Nunito Sans', sans-serif;">
                 &#10003; {message}
             </span>
@@ -381,9 +410,9 @@ def build_review_gate_html(verif_state: dict | None) -> str:
         """
 
     return f"""
-    <div style="background:#FFF8F0; padding:10px 16px; border-radius:8px;
-                border:1px solid #D4A04A; margin-bottom:8px;">
-        <span style="color:#D4A04A; font-weight:600; font-size:0.85em;
+    <div style="background:#FFFBF0; padding:10px 16px; border-radius:8px;
+                border:1px solid #E68A00; margin-bottom:8px;">
+        <span style="color:#E68A00; font-weight:600; font-size:13px;
                     font-family:'Nunito Sans', sans-serif;">
             &#9888; {message}
         </span>
@@ -447,17 +476,17 @@ def build_verification_html(result: ExtractionResult) -> str:
     total_metrics = len(result.provenance)
     needs_review = sum(1 for r in result.provenance.values() if r.needs_review)
 
-    status_color = "#5B7B6F" if needs_review == 0 else "#D4A04A"
+    status_color = "#1A7A45" if needs_review == 0 else "#E68A00"
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
-                border:1px solid #E5E0D8; margin-bottom:16px;
+                border:1px solid #E2E8F0; margin-bottom:16px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="font-size:1.1em; font-weight:600; color:#2C2C2C;
+        <div style="font-size:1.1em; font-weight:600; color:#0D1B2A;
                     font-family:'Nunito Sans', sans-serif;">
             Extraction Verification
         </div>
-        <div style="font-size:0.85em; color:#6B7280; margin-top:4px;">
+        <div style="font-size:13px; color:#64748B; margin-top:4px;">
             {total_metrics} metrics extracted &middot;
             <span style="color:{status_color};">{needs_review} need review</span>
         </div>
@@ -468,13 +497,13 @@ def build_verification_html(result: ExtractionResult) -> str:
 def build_metric_row_html(record: ProvenanceRecord) -> str:
     """Legacy: Build HTML for a single metric verification row."""
     needs_review = record.needs_review
-    bg_color = "#FFF8F0" if needs_review else "#FFFFFF"
-    border_color = "#D4A04A" if needs_review else "#E5E0D8"
+    bg_color = "#FFFBF0" if needs_review else "#FFFFFF"
+    border_color = "#E68A00" if needs_review else "#E2E8F0"
 
     badge = ""
     if needs_review:
         badge = (
-            '<span style="background:#D4A04A; color:white; padding:1px 6px; '
+            '<span style="background:#E68A00; color:white; padding:1px 6px; '
             'border-radius:8px; font-size:0.7em; font-weight:bold;">NEEDS REVIEW</span>'
         )
 
@@ -482,11 +511,11 @@ def build_metric_row_html(record: ProvenanceRecord) -> str:
     if record.citations:
         c = record.citations[0]
         quote_html = f"""
-        <div style="font-size:0.75em; color:#6B7280; margin-top:6px;
+        <div style="font-size:12px; color:#64748B; margin-top:6px;
                     font-style:italic; max-height:60px; overflow:hidden;
                     font-family:'Lora', Georgia, serif;">
             "{c.quote[:200]}{'...' if len(c.quote) > 200 else ''}"
-            <span style="color:#9CA3AF;"> — Page {c.page_number}</span>
+            <span style="color:#94A3B8;"> — Page {c.page_number}</span>
         </div>
         """
 
@@ -495,12 +524,12 @@ def build_metric_row_html(record: ProvenanceRecord) -> str:
                 border:1px solid {border_color}; margin:6px 0;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <span style="font-weight:600; color:#2C2C2C;">
+                <span style="font-weight:600; color:#0D1B2A;">
                     {record.display_label}
                 </span>
                 {badge}
             </div>
-            <div style="font-size:0.8em; color:#6B7280;">
+            <div style="font-size:13px; color:#64748B;">
                 Confidence: {record.confidence_score:.0%}
             </div>
         </div>

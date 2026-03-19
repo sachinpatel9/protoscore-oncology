@@ -1,6 +1,6 @@
 """
 Extraction pipeline progress display for ProtoScore V2.
-Design: Warm Clinical / Organic Modern
+Design: Clinical Design System
 """
 
 
@@ -17,24 +17,37 @@ PIPELINE_STEPS = [
 ]
 
 
-def build_progress_html(step: str, fraction: float) -> str:
-    """Build HTML progress bar with step description."""
+def build_progress_html(step: str, fraction: float, elapsed_seconds: float = 0) -> str:
+    """Build HTML progress bar with agent status and elapsed time.
+
+    Args:
+        step: Current pipeline step description (e.g. "Logic Agent: Extracting I/E criteria...")
+        fraction: Progress fraction 0.0–1.0
+        elapsed_seconds: Seconds elapsed since extraction started
+    """
     pct = int(fraction * 100)
-    bar_color = "#5B7B6F"  # Sage throughout
+
+    # Format elapsed time
+    mins = int(elapsed_seconds) // 60
+    secs = int(elapsed_seconds) % 60
+    elapsed_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
 
     return f"""
-    <div style="background:#FFFFFF; padding:16px; border-radius:12px;
-                border:1px solid #E5E0D8; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="font-size:0.85em; color:#6B7280; margin-bottom:8px;
-                    font-family:'Nunito Sans', sans-serif;">
-            {step}
+    <div style="padding:12px 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:6px;">
+            <span style="font-size:12px; color:#0E7C86;
+                         font-family:'JetBrains Mono', 'Fira Code', monospace;">
+                {step} {pct}%
+            </span>
+            <span style="font-size:12px; color:#94A3B8;
+                         font-family:'JetBrains Mono', 'Fira Code', monospace;">
+                {elapsed_str}
+            </span>
         </div>
-        <div style="background:#E5E0D8; border-radius:6px; height:8px; overflow:hidden;">
-            <div style="background:{bar_color}; height:100%; width:{pct}%;
+        <div style="background:#E2E8F0; border-radius:6px; height:6px; overflow:hidden;">
+            <div style="background:#0E7C86; height:100%; width:{pct}%;
                         border-radius:6px; transition:width 0.3s ease;"></div>
-        </div>
-        <div style="font-size:0.75em; color:#9CA3AF; margin-top:4px; text-align:right;">
-            {pct}%
         </div>
     </div>
     """

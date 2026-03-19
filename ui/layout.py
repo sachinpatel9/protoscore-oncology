@@ -1,32 +1,38 @@
 """
 Gradio theme and layout constants for ProtoScore V2.
-Warm Clinical / Organic Modern design system.
+Clinical design system — cool clinical palette with strict typography hierarchy.
 """
 
 import gradio as gr
 
 
-# -- Warm Clinical / Organic Modern palette --
-SAGE = "#5B7B6F"
-TERRACOTTA = "#C0755B"
-BRONZE = "#8B6F4E"
-GOLD = "#D4A04A"
-WARM_BG = "#FAF7F2"
-CARD_BG = "#FFFFFF"
-PANEL_BG = "#F5F1EA"
-CODE_BG = "#F0EDE6"
-TEXT_PRIMARY = "#2C2C2C"
-TEXT_SECONDARY = "#6B7280"
-TEXT_TERTIARY = "#9CA3AF"
-BORDER = "#E5E0D8"
-STATUS_GOOD = "#5B7B6F"
-STATUS_OK = "#7A9E8E"
-STATUS_WARN = "#D4A04A"
-STATUS_BAD = "#C0755B"
+# -- Clinical Design System palette --
+TEAL = "#0E7C86"       # Primary accent (active states, buttons, highlights)
+NAVY = "#0D1B2A"       # Headings and score numbers
+RED = "#C0392B"         # High risk indicators only
+AMBER = "#E68A00"       # Moderate risk indicators only
+GREEN = "#1A7A45"       # Low risk indicators only
+BG = "#F8FAFB"          # App background (cool off-white)
+CARD_BG = "#FFFFFF"     # Card backgrounds
+PANEL_BG = "#F0F4F8"    # Panel/formula backgrounds
+CODE_BG = "#EDF2F7"     # Code block backgrounds
+TEXT_PRIMARY = "#0D1B2A" # Primary text (navy)
+TEXT_SECONDARY = "#64748B" # Labels, metadata
+TEXT_TERTIARY = "#94A3B8"  # Hints, disabled
+BORDER = "#E2E8F0"      # Borders and rules
+FORMULA_TEXT = "#334155" # Formula/code body text
 
 # Backward-compatible aliases
-TEAL = SAGE
-DARK_BG = WARM_BG
+SAGE = TEAL
+TERRACOTTA = RED
+BRONZE = TEXT_SECONDARY
+GOLD = AMBER
+WARM_BG = BG
+DARK_BG = BG
+STATUS_GOOD = GREEN
+STATUS_OK = "#3A9CA5"   # Lighter teal for Grade B
+STATUS_WARN = AMBER
+STATUS_BAD = RED
 
 # Custom CSS for the Gradio app
 CUSTOM_CSS = """
@@ -35,18 +41,19 @@ CUSTOM_CSS = """
 
     /* --- CSS Custom Properties (Design Tokens) --- */
     :root {
-        --ps-bg: #FAF7F2;
-        --ps-panel: #F5F1EA;
+        --ps-bg: #F8FAFB;
+        --ps-panel: #F0F4F8;
         --ps-card: #FFFFFF;
-        --ps-code: #F0EDE6;
-        --ps-text: #2C2C2C;
-        --ps-text-secondary: #6B7280;
-        --ps-text-tertiary: #9CA3AF;
-        --ps-sage: #5B7B6F;
-        --ps-terracotta: #C0755B;
-        --ps-bronze: #8B6F4E;
-        --ps-gold: #D4A04A;
-        --ps-border: #E5E0D8;
+        --ps-code: #EDF2F7;
+        --ps-text: #0D1B2A;
+        --ps-text-secondary: #64748B;
+        --ps-text-tertiary: #94A3B8;
+        --ps-teal: #0E7C86;
+        --ps-red: #C0392B;
+        --ps-navy: #0D1B2A;
+        --ps-amber: #E68A00;
+        --ps-green: #1A7A45;
+        --ps-border: #E2E8F0;
         --ps-shadow: 0 2px 8px rgba(0,0,0,0.06);
         --ps-shadow-hover: 0 4px 16px rgba(0,0,0,0.10);
         --ps-radius: 12px;
@@ -67,22 +74,22 @@ CUSTOM_CSS = """
         --background-fill-secondary: var(--ps-panel) !important;
         --block-background-fill: var(--ps-card) !important;
         --body-background-fill: var(--ps-bg) !important;
-        --color-accent-soft: rgba(91, 123, 111, 0.1) !important;
+        --color-accent-soft: rgba(14, 124, 134, 0.1) !important;
         --body-text-color: var(--ps-text) !important;
         --block-label-text-color: var(--ps-text-secondary) !important;
         --input-background-fill: var(--ps-card) !important;
         --border-color-primary: var(--ps-border) !important;
         --block-border-color: var(--ps-border) !important;
         --panel-background-fill: var(--ps-panel) !important;
-        --button-primary-background-fill: var(--ps-sage) !important;
-        --button-primary-background-fill-hover: #4A6A5E !important;
+        --button-primary-background-fill: var(--ps-teal) !important;
+        --button-primary-background-fill-hover: #0A6670 !important;
         --button-primary-text-color: white !important;
         --button-secondary-background-fill: var(--ps-panel) !important;
         --button-secondary-text-color: var(--ps-text) !important;
         --button-secondary-border-color: var(--ps-border) !important;
     }
 
-    /* --- Paper texture background --- */
+    /* --- Subtle texture background --- */
     .gradio-container::before {
         content: '';
         position: fixed;
@@ -100,14 +107,65 @@ CUSTOM_CSS = """
     }
 
     /* --- Tabs styling --- */
+    .tab-nav {
+        border-bottom: 2px solid #E2E8F0 !important;
+    }
     .tab-nav button {
         font-family: var(--ps-font-body) !important;
         font-weight: 600 !important;
-        color: var(--ps-text-secondary) !important;
+        color: #64748B !important;
+        border-bottom: 2px solid transparent !important;
+        margin-bottom: -2px !important;
     }
     .tab-nav button.selected {
-        color: var(--ps-sage) !important;
-        border-color: var(--ps-sage) !important;
+        color: #0E7C86 !important;
+        border-bottom: 2px solid #0E7C86 !important;
+    }
+
+    /* --- Mode selector pill toggle --- */
+    .mode-toggle {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    .mode-toggle .wrap {
+        background: #F1F5F9 !important;
+        border-radius: 24px !important;
+        padding: 4px !important;
+        gap: 0 !important;
+    }
+    .mode-toggle label {
+        padding: 6px 20px !important;
+        border-radius: 20px !important;
+        color: #64748B !important;
+        background: transparent !important;
+        border: none !important;
+        font-size: 13px !important;
+        font-family: var(--ps-font-body) !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+    }
+    .mode-toggle label.selected {
+        background: #0E7C86 !important;
+        color: #FFFFFF !important;
+    }
+    .mode-toggle .hide, .mode-toggle > label:first-child {
+        display: none !important;
+    }
+
+    /* --- LLM Provider selector --- */
+    .llm-selector label span {
+        font-size: 11px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        color: #64748B !important;
+    }
+    .llm-selector select,
+    .llm-selector input,
+    .llm-selector .wrap-inner {
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+        background: #FFFFFF !important;
     }
 
     /* --- PDF viewer panel --- */
@@ -124,16 +182,91 @@ CUSTOM_CSS = """
         font-size: 0.85em !important;
         font-family: var(--ps-font-body) !important;
     }
+    .verification-table table th {
+        font-size: 11px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        color: #64748B !important;
+        border-bottom: 2px solid #E2E8F0 !important;
+        font-family: 'Nunito Sans', sans-serif !important;
+    }
+    .verification-table table tr:nth-child(even) td {
+        background: #F8FAFB !important;
+    }
+    .verification-table table tr:nth-child(odd) td {
+        background: #FFFFFF !important;
+    }
     .verification-table td {
         white-space: pre-wrap !important;
         word-break: break-word;
         max-width: 250px;
         color: var(--ps-text) !important;
     }
+    .verification-table td:last-child {
+        min-width: 100px !important;
+        white-space: nowrap !important;
+    }
     .verification-table input {
         background: var(--ps-card) !important;
         color: var(--ps-text) !important;
         border: 1px solid var(--ps-border) !important;
+    }
+
+    /* --- Batch verification action buttons --- */
+    .bulk-approve-btn button {
+        background: #F0FDF4 !important;
+        border: 1px solid #BBF7D0 !important;
+        color: #1A7A45 !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+    }
+    .confirm-score-btn button {
+        background: #0E7C86 !important;
+        color: white !important;
+        width: 100% !important;
+    }
+    .confirm-field-btn button {
+        border: 1px solid #0E7C86 !important;
+        color: #0E7C86 !important;
+        background: transparent !important;
+    }
+    .export-audit-btn button {
+        background: transparent !important;
+        border: none !important;
+        color: #64748B !important;
+        box-shadow: none !important;
+        text-decoration: underline !important;
+    }
+
+    /* --- Simulator slider styling --- */
+    .sim-slider input[type=range]::-webkit-slider-runnable-track { background: #E2E8F0 !important; }
+    .sim-slider input[type=range]::-webkit-slider-thumb { background: #0E7C86 !important; }
+    .sim-slider label span { font-size: 11px !important; text-transform: uppercase !important; color: #64748B !important; letter-spacing: 0.06em !important; }
+    .sim-slider .wrap { font-size: 16px !important; font-weight: 700 !important; color: #0D1B2A !important; }
+
+    /* --- Simulator buttons --- */
+    .sim-btn button, .enroll-btn button {
+        background: #0E7C86 !important; color: #FFFFFF !important;
+        border-radius: 6px !important; font-size: 14px !important;
+        font-weight: 700 !important; width: 100% !important;
+        border: none !important;
+    }
+    .sim-btn button:hover, .enroll-btn button:hover {
+        background: #0B6A73 !important;
+    }
+
+    /* --- Simulator panel balance --- */
+    .sim-row > .column, .enroll-row > .column {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+    }
+
+    /* --- Radar chart label --- */
+    .radar-plot .label-wrap span {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
     }
 
     /* --- Card hover transitions --- */
@@ -144,24 +277,46 @@ CUSTOM_CSS = """
         box-shadow: var(--ps-shadow-hover);
         transform: scale(1.01);
     }
+
+    /* --- PDF navigation bar --- */
+    .pdf-nav-bar {
+        background: #F1F5F9 !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        gap: 8px !important;
+    }
+    .pdf-nav-bar .gr-button, .pdf-nav-bar button {
+        min-width: auto !important;
+    }
+    .pdf-nav-bar input[type="number"] {
+        width: 60px !important;
+        text-align: center !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+    }
 """
 
 
 HEADER_HTML = """
-<div style="display:flex; align-items:center; gap:12px; padding:10px 0;
-            border-bottom: 1px solid #E5E0D8; margin-bottom: 8px;">
-    <div style="font-family:'Lora', Georgia, serif;
-                font-size:1.8em; font-weight:700; color:#5B7B6F;">
-        ProtoScore
+<div style="padding:8px 0; border-bottom:1px solid #E2E8F0; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <div style="font-family:'Lora', Georgia, serif;
+                    font-size:24px; font-weight:700; color:#0D1B2A;">
+            ProtoScore
+        </div>
+        <div style="font-family:'Lora', Georgia, serif;
+                    font-size:24px; font-weight:400; border-left:2px solid #E2E8F0;
+                    padding-left:12px; color:#0E7C86;">
+            Oncology
+        </div>
+        <div style="margin-left:auto; font-size:11px; color:#94A3B8;
+                    font-family:'Nunito Sans', sans-serif;">
+            V2.0
+        </div>
     </div>
-    <div style="font-family:'Lora', Georgia, serif;
-                font-size:1.4em; font-weight:600; border-left:2px solid #E5E0D8;
-                padding-left:12px; color:#C0755B;">
-        Oncology
-    </div>
-    <div style="margin-left:auto; font-size:0.75em; color:#9CA3AF;
+    <div style="font-size:12px; font-style:italic; color:#64748B; margin-top:4px;
                 font-family:'Nunito Sans', sans-serif;">
-        V2.0
+        Protocol Complexity Intelligence for Oncology Trials
     </div>
 </div>
 """
