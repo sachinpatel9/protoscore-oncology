@@ -64,15 +64,17 @@ def test_provider_enum():
 
 
 def test_model_name():
-    """Pipeline reports its model identifier."""
+    """Pipeline reports the active model — default or OPENAI_MODEL override."""
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         print("SKIP  test_model_name (OPENAI_API_KEY not set)")
         return
+    from logic.providers.openai import DEFAULT_MODEL
+    expected = os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
     doc = _build_minimal_doc()
     pipeline = OpenAIExtractionPipeline(api_key, doc)
-    assert pipeline.model_name == "gpt-5.4", (
-        f"expected model_name=gpt-5.4, got {pipeline.model_name}"
+    assert pipeline.model_name == expected, (
+        f"expected model_name={expected}, got {pipeline.model_name}"
     )
     print(f"PASS  model_name == {pipeline.model_name}")
 

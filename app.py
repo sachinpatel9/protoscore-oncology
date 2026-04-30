@@ -294,7 +294,27 @@ def run_extraction(file_path, llm_provider):
         )
 
     except Exception as e:
-        error_msg = f"Extraction failed: {str(e)}"
+        # Tailored message for OpenAI rate-limit failures so the user knows
+        # this is an account/billing limit, not a code bug.
+        try:
+            import openai
+            is_openai_429 = isinstance(e, openai.RateLimitError)
+        except Exception:
+            is_openai_429 = False
+
+        if is_openai_429:
+            from logic.providers.openai import DEFAULT_MODEL as _OPENAI_DEFAULT
+            active_model = os.getenv("OPENAI_MODEL", _OPENAI_DEFAULT)
+            error_msg = (
+                f"**OpenAI rate limit reached** for `{active_model}`. The extraction "
+                "makes 5 sequential calls; retry with backoff already ran 3× without "
+                "success. Options: wait ~60s and retry, switch to **Claude (Cloud)** "
+                "or **Ollama (Local)** in the dropdown, set `OPENAI_MODEL` in `.env` "
+                "to a higher-RPM model, or upgrade at "
+                "https://platform.openai.com/account/billing."
+            )
+        else:
+            error_msg = f"Extraction failed: {str(e)}"
         yield error_tuple[:6] + (error_msg,) + error_tuple[7:]
 
 

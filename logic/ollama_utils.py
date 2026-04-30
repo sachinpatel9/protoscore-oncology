@@ -354,7 +354,11 @@ def get_provider_status_html(label: str) -> str:
     """
     if label == "OpenAI (Cloud)":
         if os.getenv("OPENAI_API_KEY", ""):
-            return _connected_pill("Connected &middot; gpt-5.4 &middot; Cloud")
+            # Resolve the active OpenAI model once so the pill matches the model
+            # the pipeline will actually call (default + OPENAI_MODEL override).
+            from logic.providers.openai import DEFAULT_MODEL as _OPENAI_DEFAULT
+            active_model = os.getenv("OPENAI_MODEL", _OPENAI_DEFAULT)
+            return _connected_pill(f"Connected &middot; {active_model} &middot; Cloud")
         return _error_pill("OPENAI_API_KEY missing &mdash; add it to .env")
     if label == "Claude (Cloud)":
         if os.getenv("ANTHROPIC_API_KEY", ""):
