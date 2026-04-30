@@ -1107,8 +1107,9 @@ def build_app():
                             datatype=["str", "str", "str", "number", "number", "str"],
                             interactive=True,
                             wrap=True,
-                            row_count=(1, "dynamic"),
-                            column_count=(6, "fixed"),
+                            row_count=1,
+                            column_count=6,
+                            column_limits=(6, 6),
                         )
 
                         # Action buttons
