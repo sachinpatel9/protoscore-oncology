@@ -226,7 +226,7 @@ def build_amendment_formula_display(amendment_formula: dict) -> str:
         <div style="font-size:11px; color:{color}; font-weight:600; margin-bottom:8px;
                     text-transform:uppercase; letter-spacing:0.08em;
                     font-family:'Nunito Sans', sans-serif;">
-            AMENDMENT RISK FORMULA (FR-D5.2)
+            AMENDMENT RISK FORMULA
         </div>
         <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.6;">
             <div>{formula}</div>
@@ -350,7 +350,7 @@ def build_enrollment_formula_display(enrollment_data: dict) -> str:
         <div style="font-size:11px; color:#0E7C86; font-weight:600; margin-bottom:8px;
                     text-transform:uppercase; letter-spacing:0.08em;
                     font-family:'Nunito Sans', sans-serif;">
-            ENROLLMENT PROJECTION (FR-E6.3)
+            ENROLLMENT PROJECTION
         </div>
         <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.6;">
             <div>Rate = weighted k-NN average of top-5 similar trials</div>
@@ -404,7 +404,7 @@ def build_burden_spikes_card(spikes: list) -> str:
             Burden Spikes Detected ({len(spikes)} visit{'s' if len(spikes) != 1 else ''})
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Visits with &ge;3 invasive procedures or &ge;4 total hours (FR-A1.5)
+            Visits with &ge;3 invasive procedures or &ge;4 total hours
         </div>
         {spike_rows}
     </div>
@@ -455,7 +455,7 @@ def build_population_impact_card(impacts: list) -> str:
             Population Impact Estimates ({len(impacts)} criteria)
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Estimated eligible-pool reduction per restrictive criterion (FR-B2.5)
+            Estimated eligible-pool reduction per restrictive criterion
         </div>
         {impact_rows}
     </div>
@@ -494,7 +494,7 @@ def build_sequencing_risks_card(risks: list) -> str:
             Sequencing Risks ({len(risks)} flagged)
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Invasive procedures within 14 days of each other (FR-C3.3)
+            Invasive procedures within 14 days of each other
         </div>
         {risk_rows}
     </div>
@@ -517,7 +517,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#0E7C86; font-weight:600;">PROCEDURE WEIGHTS (FR-A1.3)</div>
+            <div style="color:#0E7C86; font-weight:600;">PROCEDURE WEIGHTS</div>
             <div>{mapped} procedures mapped ({coverage}% coverage)</div>
             <div>Total patient time: <strong>{total_min:.0f} minutes ({total_min / 60:.1f} hours)</strong></div>
             {top_html}
@@ -531,7 +531,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#C0392B; font-weight:600;">BURDEN SPIKES (FR-A1.5)</div>
+            <div style="color:#C0392B; font-weight:600;">BURDEN SPIKES</div>
             <div>{len(spikes)} visit(s) flagged: {spike_strs}</div>
         </div>
         """)
@@ -543,7 +543,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#E68A00; font-weight:600;">POPULATION IMPACT (FR-B2.5)</div>
+            <div style="color:#E68A00; font-weight:600;">POPULATION IMPACT</div>
             <div>{len(impacts)} restrictive criteria: {impact_strs}</div>
         </div>
         """)
@@ -555,7 +555,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#E68A00; font-weight:600;">SEQUENCING RISKS (FR-C3.3)</div>
+            <div style="color:#E68A00; font-weight:600;">SEQUENCING RISKS</div>
             <div>{len(risks)} risk(s): {risk_strs}</div>
         </div>
         """)

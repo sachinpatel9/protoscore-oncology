@@ -814,7 +814,7 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
 
 
 def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, protocol_id):
-    """Calculate time-to-full-enrollment with sensitivity table (FR-E6.4)."""
+    """Calculate time-to-full-enrollment with sensitivity table."""
     num_sites = int(num_sites)
     target_n = int(target_n)
 
@@ -842,7 +842,7 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     # Base estimate
     base_months = target_n / (rate * num_sites)
 
-    # Sensitivity table (±20% variance per FR-E6.4)
+    # Sensitivity table (±20% variance)
     scenarios = [
         ("Pessimistic (-20%)", rate * 0.8),
         ("Base Case", rate),
