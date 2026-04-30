@@ -138,12 +138,17 @@ def run_demo_analysis(protocol_id: str):
 # Upload Mode Handlers
 # ---------------------------------------------------------------------------
 
-def run_extraction(file_path, llm_provider, progress=gr.Progress()):
+def run_extraction(file_path, llm_provider):
     """
     Run the full extraction pipeline on an uploaded document.
 
     Generator that yields intermediate progress updates to the scorecard panel,
     then yields the final result tuple with all display components.
+
+    Progress is rendered exclusively via build_progress_html() into the
+    scorecard slot. Do NOT add a gr.Progress() parameter — Gradio's built-in
+    progress overlay paints onto every output component being updated and
+    visually duplicates the progress bar across panels.
     """
     use_ollama = llm_provider == "Ollama (Local)"
     start_time = time.time()
@@ -194,15 +199,10 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 
         # Step 1: Parse document
         yield _progress_tuple("Parsing document...", 0.10)
-        progress(0.10, desc="Parsing document...")
         if is_word:
             parsed_doc = parse_protocol_docx(file_bytes)
         else:
             parsed_doc = parse_protocol_pdf(file_bytes)
-
-        # Step 2: Run extraction pipeline with progress callback
-        def progress_cb(step: str, fraction: float):
-            progress(fraction, desc=step)
 
         if use_ollama:
             installed = get_installed_models()
@@ -210,13 +210,7 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 
             if model not in installed:
                 yield _progress_tuple(f"Pulling {model}...", 0.12)
-                progress(0.12, desc=f"Pulling {model} (best for your system)...")
-                success = pull_model(
-                    model,
-                    progress_callback=lambda msg, frac: progress(
-                        0.12 + frac * 0.08, desc=msg
-                    ),
-                )
+                success = pull_model(model)
                 if not success:
                     yield error_tuple[:6] + (
                         f"Failed to pull model `{model}`. "
@@ -230,16 +224,15 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             pipeline = ExtractionPipeline(api_key, parsed_doc)
 
         yield _progress_tuple("Running extraction pipeline...", 0.20)
-        result = pipeline.run(progress_callback=progress_cb)
+        result = pipeline.run()
         result.source_filename = filename
         result.total_pages = parsed_doc.total_pages
 
         # Step 3: Resolve citation bounding boxes
         yield _progress_tuple("Resolving source citations...", 0.95)
-        progress(0.98, desc="Resolving source citations...")
         result = resolve_all_citations(result, parsed_doc)
 
-        # Step 4: Initialize verification state (FR-4.4, UX-2.1)
+        # Step 4: Initialize verification state
         verif_state = init_verification_state(result.provenance)
 
         # Step 5: Score (initial, before user verification)
@@ -274,12 +267,10 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         if not is_word:
             page_img = render_pdf_page(file_bytes, 1)
 
-        # Step 6: Build batch verification table (UX-2.1)
+        # Step 6: Build batch verification table
         batch_df = build_verification_dataframe(result, verif_state)
         confidence_dashboard = build_confidence_dashboard_html(verif_state)
         review_gate = build_review_gate_html(verif_state)
-
-        progress(1.0, desc="Extraction complete.")
 
         # Final yield — full results, clear pdf_empty_state
         yield (
