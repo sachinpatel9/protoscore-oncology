@@ -1108,7 +1108,7 @@ def build_app():
                             interactive=True,
                             wrap=True,
                             row_count=(1, "dynamic"),
-                            col_count=(6, "fixed"),
+                            column_count=(6, "fixed"),
                         )
 
                         # Action buttons
