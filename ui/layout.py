@@ -278,6 +278,31 @@ CUSTOM_CSS = """
         transform: scale(1.01);
     }
 
+    /* --- Score Reliability grade badge --- */
+    .grade-badge {
+        display: inline-block;
+        color: #FFFFFF;
+        font-family: var(--ps-font-display);
+        font-weight: 800;
+        text-align: center;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .grade-badge.grade-lg {
+        padding: 6px 18px;
+        border-radius: 20px;
+        font-size: 20px;
+    }
+    .grade-badge.grade-sm {
+        padding: 4px 12px;
+        border-radius: 14px;
+        font-size: 14px;
+    }
+    .grade-badge.grade-A { background-color: #1A7A45; }
+    .grade-badge.grade-B { background-color: #3A9CA5; }
+    .grade-badge.grade-C { background-color: #E68A00; }
+    .grade-badge.grade-D { background-color: #C0392B; }
+
     /* --- PDF navigation bar --- */
     .pdf-nav-bar {
         background: #F1F5F9 !important;

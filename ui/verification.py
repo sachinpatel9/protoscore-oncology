@@ -344,9 +344,10 @@ def build_confidence_dashboard_html(verif_state: dict | None) -> str:
                     {stats['total']} fields total
                 </span>
             </div>
-            <span style="background:{grade_color}; color:white; padding:6px 18px;
+            <span class="grade-badge grade-lg grade-{grade}"
+                  style="background:{grade_color}; color:white; padding:6px 18px;
                          border-radius:20px; font-size:20px; font-weight:800;
-                         font-family:'Lora', Georgia, serif;">{grade}</span>
+                         font-family:'Lora', Georgia, serif; display:inline-block;">{grade}</span>
         </div>
 
         <div style="display:flex; height:8px; border-radius:4px; overflow:hidden;
