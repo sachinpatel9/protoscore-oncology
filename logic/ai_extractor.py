@@ -18,9 +18,17 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Callable, Optional
 
 import anthropic
+
+
+class Provider(Enum):
+    """Supported LLM providers for the extraction pipeline."""
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
 
 from logic.pdf_parser import ParsedDocument
 from logic.pii_scrubber import scrub_pii
@@ -272,13 +280,22 @@ CLASSIFY_SECTIONS_TOOL = {
 }
 
 
-# Map tool names to their JSON schemas (reused by Ollama path)
+# Map tool names to their JSON schemas (reused by Ollama and OpenAI paths)
 TOOL_SCHEMAS = {
     "classify_sections": CLASSIFY_SECTIONS_TOOL["input_schema"],
     "extract_ie_criteria": EXTRACT_IE_CRITERIA_TOOL["input_schema"],
     "extract_visit_schedule": EXTRACT_VISIT_SCHEDULE_TOOL["input_schema"],
     "extract_procedures": EXTRACT_PROCEDURES_TOOL["input_schema"],
     "extract_endpoints": EXTRACT_ENDPOINTS_TOOL["input_schema"],
+}
+
+# Lookup of full Anthropic-style tool defs (used by OpenAI path for descriptions)
+_TOOL_BY_NAME = {
+    "classify_sections": CLASSIFY_SECTIONS_TOOL,
+    "extract_ie_criteria": EXTRACT_IE_CRITERIA_TOOL,
+    "extract_visit_schedule": EXTRACT_VISIT_SCHEDULE_TOOL,
+    "extract_procedures": EXTRACT_PROCEDURES_TOOL,
+    "extract_endpoints": EXTRACT_ENDPOINTS_TOOL,
 }
 
 
@@ -741,6 +758,53 @@ class ExtractionPipeline(BaseExtractionPipeline):
                 return block.input
 
         return {}
+
+
+# ---------------------------------------------------------------------------
+# OpenAI API Pipeline
+# ---------------------------------------------------------------------------
+
+class OpenAIExtractionPipeline(BaseExtractionPipeline):
+    """OpenAI extraction using function calling for structured output."""
+
+    MODEL = "gpt-5.4"
+
+    def __init__(self, api_key: str, parsed_doc: ParsedDocument):
+        super().__init__(parsed_doc)
+        from openai import OpenAI
+        self.client = OpenAI(api_key=api_key)
+
+    @property
+    def model_name(self) -> str:
+        return self.MODEL
+
+    def _call_llm(self, user_prompt: str, tool_name: str) -> dict:
+        scrubbed_prompt, _ = scrub_pii(user_prompt)
+
+        function_def = {
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "description": _TOOL_BY_NAME[tool_name]["description"],
+                "parameters": TOOL_SCHEMAS[tool_name],
+            },
+        }
+
+        response = self.client.chat.completions.create(
+            model=self.MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": scrubbed_prompt},
+            ],
+            tools=[function_def],
+            tool_choice={"type": "function", "function": {"name": tool_name}},
+            max_completion_tokens=8192,
+        )
+
+        msg = response.choices[0].message
+        if not msg.tool_calls:
+            return {}
+        return json.loads(msg.tool_calls[0].function.arguments)
 
 
 # ---------------------------------------------------------------------------

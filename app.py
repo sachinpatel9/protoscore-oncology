@@ -26,11 +26,17 @@ from logic.data_manager import load_demo_data, load_from_extraction, get_protoco
 from logic.scoring import calculate_pcs, format_score_formula, format_amendment_risk_formula
 from logic.provenance import ExtractionResult, resolve_all_citations, build_page_index
 from logic.pdf_parser import parse_protocol_pdf, parse_protocol_docx
-from logic.ai_extractor import ExtractionPipeline, OllamaExtractionPipeline
+from logic.ai_extractor import (
+    ExtractionPipeline,
+    OllamaExtractionPipeline,
+    OpenAIExtractionPipeline,
+    Provider,
+)
 from logic.ollama_utils import (
     check_ollama_running,
     get_installed_models,
     get_ollama_status_html,
+    get_provider_status_html,
     get_system_ram_gb,
     pull_model,
     recommend_model,
@@ -70,6 +76,13 @@ load_dotenv()
 
 # Default scoring weights
 DEFAULT_WEIGHTS = {"complexity": 0.4, "patient": 0.3, "site": 0.3}
+
+# Maps the user-facing dropdown label to the internal Provider enum.
+PROVIDER_BY_LABEL = {
+    "OpenAI (Cloud)": Provider.OPENAI,
+    "Claude (Cloud)": Provider.ANTHROPIC,
+    "Ollama (Local)": Provider.OLLAMA,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +163,7 @@ def run_extraction(file_path, llm_provider):
     progress overlay paints onto every output component being updated and
     visually duplicates the progress bar across panels.
     """
-    use_ollama = llm_provider == "Ollama (Local)"
+    provider = PROVIDER_BY_LABEL.get(llm_provider, Provider.ANTHROPIC)
     start_time = time.time()
 
     # Helper: build a 13-element tuple with progress in scorecard slot
@@ -176,15 +189,19 @@ def run_extraction(file_path, llm_provider):
         "",  # pdf_empty_state cleared on error
     )
 
-    if not use_ollama:
-        api_key = os.getenv("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            yield error_tuple[:6] + (
-                "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
-            ) + error_tuple[7:]
-            return
+    if provider is Provider.ANTHROPIC and not os.getenv("ANTHROPIC_API_KEY", ""):
+        yield error_tuple[:6] + (
+            "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
+        ) + error_tuple[7:]
+        return
 
-    if use_ollama and not check_ollama_running():
+    if provider is Provider.OPENAI and not os.getenv("OPENAI_API_KEY", ""):
+        yield error_tuple[:6] + (
+            "OPENAI_API_KEY not found. Please set it in your .env file.",
+        ) + error_tuple[7:]
+        return
+
+    if provider is Provider.OLLAMA and not check_ollama_running():
         yield error_tuple[:6] + (
             "Ollama is not running. Install from [ollama.com](https://ollama.com), "
             "then run `ollama serve`.",
@@ -204,7 +221,7 @@ def run_extraction(file_path, llm_provider):
         else:
             parsed_doc = parse_protocol_pdf(file_bytes)
 
-        if use_ollama:
+        if provider is Provider.OLLAMA:
             installed = get_installed_models()
             model, tier, rationale = recommend_model(installed)
 
@@ -219,9 +236,10 @@ def run_extraction(file_path, llm_provider):
                     return
 
             pipeline = OllamaExtractionPipeline(model, parsed_doc)
+        elif provider is Provider.OPENAI:
+            pipeline = OpenAIExtractionPipeline(os.getenv("OPENAI_API_KEY", ""), parsed_doc)
         else:
-            api_key = os.getenv("ANTHROPIC_API_KEY", "")
-            pipeline = ExtractionPipeline(api_key, parsed_doc)
+            pipeline = ExtractionPipeline(os.getenv("ANTHROPIC_API_KEY", ""), parsed_doc)
 
         yield _progress_tuple("Running extraction pipeline...", 0.20)
         result = pipeline.run()
@@ -971,8 +989,8 @@ def build_app():
             )
             with gr.Row():
                 llm_provider = gr.Dropdown(
-                    choices=["Claude API", "Ollama (Local)"],
-                    value="Claude API",
+                    choices=["OpenAI (Cloud)", "Claude (Cloud)", "Ollama (Local)"],
+                    value="OpenAI (Cloud)",
                     label="LLM Provider",
                     interactive=True,
                     scale=1,
@@ -984,7 +1002,7 @@ def build_app():
                     size="lg",
                     scale=1,
                 )
-            ollama_status = gr.HTML("", visible=False)
+            provider_status = gr.HTML(get_provider_status_html("OpenAI (Cloud)"))
             error_display = gr.Markdown("")
 
         # =================================================================
@@ -1215,15 +1233,13 @@ def build_app():
             outputs=[upload_section, demo_section],
         )
 
-        # LLM provider toggle — show Ollama status when selected
-        def on_provider_change(provider):
-            if provider == "Ollama (Local)":
-                return gr.update(visible=True, value=get_ollama_status_html())
-            return gr.update(visible=False, value="")
+        # LLM provider toggle — refresh the connection-status pill
+        def on_provider_change(provider_label):
+            return gr.update(value=get_provider_status_html(provider_label))
 
         llm_provider.change(
             on_provider_change, inputs=[llm_provider],
-            outputs=[ollama_status],
+            outputs=[provider_status],
         )
 
         # Demo selector change
