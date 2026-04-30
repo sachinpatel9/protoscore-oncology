@@ -26,11 +26,12 @@ from logic.data_manager import load_demo_data, load_from_extraction, get_protoco
 from logic.scoring import calculate_pcs, format_score_formula, format_amendment_risk_formula
 from logic.provenance import ExtractionResult, resolve_all_citations, build_page_index
 from logic.pdf_parser import parse_protocol_pdf, parse_protocol_docx
-from logic.ai_extractor import (
+from logic.providers import (
     ExtractionPipeline,
     OllamaExtractionPipeline,
     OpenAIExtractionPipeline,
     Provider,
+    PROVIDER_BY_LABEL,
 )
 from logic.ollama_utils import (
     check_ollama_running,
@@ -77,12 +78,9 @@ load_dotenv()
 # Default scoring weights
 DEFAULT_WEIGHTS = {"complexity": 0.4, "patient": 0.3, "site": 0.3}
 
-# Maps the user-facing dropdown label to the internal Provider enum.
-PROVIDER_BY_LABEL = {
-    "OpenAI (Cloud)": Provider.OPENAI,
-    "Claude (Cloud)": Provider.ANTHROPIC,
-    "Ollama (Local)": Provider.OLLAMA,
-}
+# `PROVIDER_BY_LABEL` is imported from `logic.providers.registry` — it lives
+# alongside the `Provider` enum it depends on, so adding a new provider only
+# touches one file.
 
 
 # ---------------------------------------------------------------------------
