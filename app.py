@@ -122,19 +122,6 @@ def run_demo_analysis(protocol_id: str):
     if any(protocol.get(k) for k in ("procedure_weight_summary", "burden_spikes", "population_impacts", "sequencing_risks")):
         formula_html += build_enhancement_formula_display(protocol)
 
-    # Insights panel
-    insights = protocol.get("rwd_insights", [])
-    insights_html = '<div style="padding:8px;">'
-    for insight in insights:
-        insights_html += f"""
-        <div style="background:#FFFBF0; padding:10px; border-radius:8px;
-                    border-left:3px solid #E68A00; margin:8px 0;
-                    font-size:13px; color:#0D1B2A;">
-            {insight}
-        </div>
-        """
-    insights_html += "</div>"
-
     # Protocol info
     info_html = f"""
     <div style="font-size:13px; color:#64748B; padding:8px;">
@@ -144,7 +131,7 @@ def run_demo_analysis(protocol_id: str):
     </div>
     """
 
-    return scorecard_html, radar_fig, formula_html, insights_html, info_html
+    return scorecard_html, radar_fig, formula_html, info_html
 
 
 # ---------------------------------------------------------------------------
@@ -1210,12 +1197,6 @@ def build_app():
                     with gr.Column(scale=2):
                         enroll_result_html = gr.HTML("")
 
-            # --- Tab 4: AI Insights ---
-            with gr.Tab("AI Insights"):
-                insights_html = gr.HTML(
-                    '<div style="color:#94A3B8; padding:20px;">Select a protocol to see insights.</div>'
-                )
-
         # =================================================================
         # EVENT WIRING
         # =================================================================
@@ -1246,7 +1227,7 @@ def build_app():
         demo_selector.change(
             run_demo_analysis,
             inputs=[demo_selector],
-            outputs=[scorecard_html, radar_chart, formula_html, insights_html, demo_info],
+            outputs=[scorecard_html, radar_chart, formula_html, demo_info],
         )
 
         # Analyze button click — now outputs to batch verification tab too
@@ -1397,7 +1378,7 @@ def build_app():
         app.load(
             run_demo_analysis,
             inputs=[demo_selector],
-            outputs=[scorecard_html, radar_chart, formula_html, insights_html, demo_info],
+            outputs=[scorecard_html, radar_chart, formula_html, demo_info],
         )
 
     return app
