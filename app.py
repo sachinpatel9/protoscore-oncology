@@ -151,14 +151,20 @@ def run_extraction(file_path, llm_provider):
     provider = PROVIDER_BY_LABEL.get(llm_provider, Provider.ANTHROPIC)
     start_time = time.time()
 
-    # Helper: build a 13-element tuple with progress in scorecard slot
+    # Helper: build a 13-element tuple with progress in scorecard slot.
+    # Local extraction (Ollama) takes 5-10 minutes on consumer hardware, so we
+    # surface a hint sub-line in the progress bar to set expectations.
     placeholder_html = build_pdf_placeholder_html()
+    show_ollama_hint = provider is Provider.OLLAMA
 
     def _progress_tuple(step, fraction):
         elapsed = time.time() - start_time
         return (
             gr.update(), gr.update(),                       # states
-            build_progress_html(step, fraction, elapsed),   # scorecard_html
+            build_progress_html(                            # scorecard_html
+                step, fraction, elapsed,
+                show_ollama_hint=show_ollama_hint,
+            ),
             gr.update(), gr.update(),                       # radar, formula
             gr.update(), gr.update(),                       # pdf, error
             gr.update(), gr.update(),                       # verif state, df
@@ -1262,6 +1268,12 @@ def build_app():
                 inline_evidence_html,
                 pdf_empty_state,
             ],
+            # Suppress Gradio's default queue overlay — we render our own
+            # single, ETA-aware progress bar via build_progress_html() into
+            # the scorecard slot. The overlay otherwise paints onto every
+            # output component being yielded, producing visible duplication
+            # across panels.
+            show_progress="hidden",
         ).then(
             # After extraction, populate the dashboard metric selector (UX-1.2)
             get_metric_choices,

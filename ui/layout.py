@@ -303,6 +303,17 @@ CUSTOM_CSS = """
     .grade-badge.grade-C { background-color: #E68A00; }
     .grade-badge.grade-D { background-color: #C0392B; }
 
+    /* --- Extraction progress: pulse the active step text so the bar
+           visibly "breathes" during long Ollama steps (2-3 min each). --- */
+    .progress-step-active {
+        animation: protoscore-progress-pulse 1.6s ease-in-out infinite;
+    }
+    .progress-step-done { /* static — no animation once done */ }
+    @keyframes protoscore-progress-pulse {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.55; }
+    }
+
     /* --- PDF navigation bar --- */
     .pdf-nav-bar {
         background: #F1F5F9 !important;
