@@ -1034,35 +1034,21 @@ def build_app():
         with gr.Tabs():
 
             # --- Tab 1: Assessment Dashboard (Split-Screen) ---
+            #
+            # LEFT column: scorecard + radar (the score readout).
+            # RIGHT column: everything PDF/source/export/formula related,
+            # stacked top-to-bottom so the user has a single vertical scan
+            # for "what was the source, where do I jump, how do I export,
+            # and how was the score calculated."
             with gr.Tab("Assessment Dashboard"):
                 with gr.Row(equal_height=False):
-                    # LEFT: Scorecard
+                    # LEFT: Scorecard + radar only.
                     with gr.Column(scale=1):
                         scorecard_html = gr.HTML("")
                         radar_chart = gr.Plot(label="Multi-Dimensional Risk", elem_classes=["radar-plot"])
-                        formula_html = gr.HTML("")
 
-                        # PDF Export (UX-3.1, UX-3.2)
-                        with gr.Row():
-                            export_pdf_btn = gr.Button(
-                                "Export PDF Report",
-                                variant="primary",
-                                size="sm",
-                            )
-                        pdf_download = gr.File(
-                            label="PDF Report Download",
-                            visible=False,
-                        )
-
-                        # Bidirectional Navigation: metric selector (UX-1.2)
-                        gr.Markdown("### Navigate to Source")
-                        dashboard_metric_selector = gr.Radio(
-                            choices=[],
-                            label="Select metric to jump to its source in the PDF",
-                            interactive=True,
-                        )
-
-                    # RIGHT: PDF Viewer
+                    # RIGHT: PDF viewer → citation nav → Navigate to Source
+                    # → Export PDF → all 4 formula panes (stacked).
                     with gr.Column(scale=1):
                         pdf_empty_state = gr.HTML(build_pdf_placeholder_html())
                         pdf_page_display = gr.Image(
@@ -1089,6 +1075,38 @@ def build_app():
 
                         # Inline evidence panel
                         dashboard_evidence_html = gr.HTML("")
+
+                        # Bidirectional Navigation: metric selector (UX-1.2),
+                        # positioned directly under the citation bar so the
+                        # user can filter through metrics and see exactly
+                        # what content the LLM cited as its source.
+                        gr.Markdown("### Navigate to Source")
+                        dashboard_metric_selector = gr.Radio(
+                            choices=[],
+                            label="Select metric to jump to its source in the PDF",
+                            interactive=True,
+                        )
+
+                        # PDF Export (UX-3.1, UX-3.2) — sits below the
+                        # navigator so the user can export immediately
+                        # after reviewing sources.
+                        with gr.Row():
+                            export_pdf_btn = gr.Button(
+                                "Export PDF Report",
+                                variant="primary",
+                                size="sm",
+                            )
+                        pdf_download = gr.File(
+                            label="PDF Report Download",
+                            visible=False,
+                        )
+
+                        # All 4 formula panes (Score Formula + Amendment
+                        # Risk + Enrollment Projection + Enhanced Pillars)
+                        # stacked at the bottom of the right column. The
+                        # formula_html component already concatenates them
+                        # in render_demo_analysis / run_extraction.
+                        formula_html = gr.HTML("")
 
             # --- Tab 2: Batch Verification (HITL — UX-2.1, UX-2.2) ---
             with gr.Tab("Batch Verification"):

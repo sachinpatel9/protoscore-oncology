@@ -725,8 +725,11 @@ def render_scorecard(score_result: dict, protocol_data: dict,
     if sequencing_risks:
         html_parts.append(build_sequencing_risks_card(sequencing_risks))
 
-    # Formula transparency
-    if formula:
-        html_parts.append(build_formula_display(formula))
+    # Formula transparency is rendered separately by the dedicated
+    # `formula_html` Gradio component in the right column (built by
+    # `build_formula_display`/amendment/enrollment/enhancement). The
+    # `formula` arg is accepted here for backward compatibility but no
+    # longer rendered to avoid duplication.
+    _ = formula
 
     return "\n".join(html_parts)
