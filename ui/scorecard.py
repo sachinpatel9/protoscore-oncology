@@ -592,55 +592,57 @@ def build_score_reliability_header(verif_state: dict | None) -> str:
     if total == 0:
         return ""
 
-    high_pct = stats["high_confidence_pct"]
+    mean_conf_pct = stats["mean_confidence_pct"]
     verified_pct = stats["verified_pct"]
     pending_pct = stats["pending_pct"]
     corrections = stats["corrections_count"]
 
-    # Grade: A = all verified, B = >80%, C = >50%, D = <50%
-    if verified_pct == 100:
-        grade, grade_color = "A", "#1A7A45"
-    elif verified_pct >= 80:
-        grade, grade_color = "B", "#3A9CA5"
-    elif verified_pct >= 50:
-        grade, grade_color = "C", "#E68A00"
-    else:
-        grade, grade_color = "D", "#C0392B"
+    bars = [
+        ("Reliability Confidence", mean_conf_pct, "#0E7C86"),
+        ("Verified Extraction Values", verified_pct, "#1A7A45"),
+        ("Pending Confirmation Extracted Values", pending_pct, "#E68A00"),
+    ]
 
-    verified_bar = min(verified_pct, 100)
-    pending_bar = min(pending_pct, 100 - verified_bar)
+    bar_rows = "".join(
+        f"""
+        <div class="score-reliability-row">
+            <div class="score-reliability-label">{label}</div>
+            <div class="score-reliability-bar-track"
+                 style="background:#E2E8F0; height:6px; border-radius:4px; overflow:hidden;
+                        box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);">
+                <div class="score-reliability-bar-fill"
+                     style="width:{pct}%; background:{color}; height:100%;
+                            border-radius:4px; transition: width 0.4s ease-out;"></div>
+            </div>
+            <div class="score-reliability-pct"
+                 style="color:{color}; font-family:'JetBrains Mono','Fira Code',monospace;
+                        font-size:13px; font-weight:700; text-align:right; min-width:44px;">{pct}%</div>
+        </div>
+        """
+        for label, pct, color in bars
+    )
 
     corrections_html = ""
     if corrections > 0:
         corrections_html = (
-            f'<span style="color:#0E7C86;">{corrections} correction'
-            f'{"s" if corrections != 1 else ""}</span>'
+            f'<span style="color:#0E7C86; margin-left:8px;">'
+            f'&middot; {corrections} correction{"s" if corrections != 1 else ""}</span>'
         )
 
     return f"""
-    <div style="background:#FFFFFF; padding:10px 14px; border-radius:12px;
-                border:1px solid {grade_color}; margin-bottom:12px;
+    <div style="background:#FFFFFF; padding:12px 14px; border-radius:12px;
+                border:1px solid #E2E8F0; margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:10px;">
             <span style="font-size:11px; color:#64748B; text-transform:uppercase;
                         letter-spacing:0.08em; font-weight:600;
                         font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
-            <span class="grade-badge grade-sm grade-{grade}"
-                  style="background:{grade_color}; color:white; padding:4px 12px;
-                        border-radius:14px; font-size:14px; font-weight:800;
-                        font-family:'Lora', Georgia, serif; display:inline-block;">{grade}</span>
+            <span style="font-size:11px; color:#94A3B8;">
+                {total} fields total{corrections_html}
+            </span>
         </div>
-        <div style="display:flex; height:6px; border-radius:3px; overflow:hidden;
-                    margin:6px 0 4px 0; background:#E2E8F0;">
-            <div style="width:{verified_bar}%; background:#1A7A45;"></div>
-            <div style="width:{pending_bar}%; background:#E68A00;"></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.65em; color:#94A3B8;">
-            <span style="color:#1A7A45;">Verified: {verified_pct}%</span>
-            <span>High Conf: {high_pct}%</span>
-            <span style="color:#E68A00;">Pending: {pending_pct}%</span>
-            {corrections_html}
-        </div>
+        {bar_rows}
     </div>
     """
 

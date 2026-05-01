@@ -241,13 +241,15 @@ def get_verification_stats(state_dict: dict) -> dict:
     Returns:
         Dict with keys: total, high_confidence, human_verified,
         pending, corrections_count, confirmations_count,
-        high_confidence_pct, verified_pct, pending_pct.
+        high_confidence_pct, verified_pct, pending_pct,
+        mean_confidence_pct.
     """
     if not state_dict:
         return {
             "total": 0, "high_confidence": 0, "human_verified": 0,
             "pending": 0, "corrections_count": 0, "confirmations_count": 0,
             "high_confidence_pct": 0, "verified_pct": 0, "pending_pct": 0,
+            "mean_confidence_pct": 0,
         }
 
     statuses = state_dict.get("field_status", {})
@@ -259,6 +261,7 @@ def get_verification_stats(state_dict: dict) -> dict:
             "total": 0, "high_confidence": 0, "human_verified": 0,
             "pending": 0, "corrections_count": 0, "confirmations_count": 0,
             "high_confidence_pct": 0, "verified_pct": 0, "pending_pct": 0,
+            "mean_confidence_pct": 0,
         }
 
     high_confidence = sum(1 for c in confidences.values() if c >= 0.85)
@@ -287,6 +290,9 @@ def get_verification_stats(state_dict: dict) -> dict:
         "high_confidence_pct": round(100 * high_confidence / total),
         "verified_pct": round(100 * human_verified / total),
         "pending_pct": round(100 * pending / total),
+        "mean_confidence_pct": round(
+            100 * sum(confidences.values()) / total
+        ) if confidences else 0,
     }
 
 

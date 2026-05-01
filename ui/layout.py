@@ -294,30 +294,44 @@ CUSTOM_CSS = """
         transform: scale(1.01);
     }
 
-    /* --- Score Reliability grade badge --- */
-    .grade-badge {
-        display: inline-block;
-        color: #FFFFFF;
-        font-family: var(--ps-font-display);
-        font-weight: 800;
-        text-align: center;
-        line-height: 1;
-        white-space: nowrap;
+    /* --- Score Reliability three-bar layout (V2.1 round 2) --- */
+    .score-reliability-row {
+        display: grid;
+        grid-template-columns: minmax(160px, 1.4fr) 3fr auto;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
     }
-    .grade-badge.grade-lg {
-        padding: 6px 18px;
-        border-radius: 20px;
-        font-size: 20px;
+    .score-reliability-row:last-child {
+        margin-bottom: 0;
     }
-    .grade-badge.grade-sm {
-        padding: 4px 12px;
-        border-radius: 14px;
-        font-size: 14px;
+    .score-reliability-label {
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748B;
+        font-weight: 600;
     }
-    .grade-badge.grade-A { background-color: #1A7A45; }
-    .grade-badge.grade-B { background-color: #3A9CA5; }
-    .grade-badge.grade-C { background-color: #E68A00; }
-    .grade-badge.grade-D { background-color: #C0392B; }
+    .score-reliability-bar-track {
+        background: #E2E8F0;
+        height: 6px;
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    .score-reliability-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.4s ease-out;
+    }
+    .score-reliability-pct {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 13px;
+        font-weight: 700;
+        text-align: right;
+        min-width: 44px;
+    }
 
     /* --- Extraction progress: pulse the active step text so the bar
            visibly "breathes" during long Ollama steps (2-3 min each). --- */
