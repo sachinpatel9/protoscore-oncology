@@ -209,27 +209,48 @@ CUSTOM_CSS = """
         border: 1px solid var(--ps-border) !important;
     }
 
-    /* --- Batch verification action buttons --- */
-    .bulk-approve-btn button {
-        background: #F0FDF4 !important;
-        border: 1px solid #BBF7D0 !important;
-        color: #1A7A45 !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
+    /* --- Batch verification action buttons ---
+       Shared base: Edit Report (secondary) and Confirm & Score (primary)
+       render as visibly equal peers — same height, padding, radius, weight. */
+    .verif-action-btn button {
+        height: 40px !important;
+        padding: 0 20px !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        font-family: var(--ps-font-body) !important;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
     }
     .confirm-score-btn button {
         background: #0E7C86 !important;
-        color: white !important;
-        width: 100% !important;
+        color: #FFFFFF !important;
+        border: none !important;
+    }
+    .confirm-score-btn button:hover {
+        background: #0A6770 !important;
     }
     .edit-report-btn button {
+        background: transparent !important;
         border: 1px solid #0E7C86 !important;
         color: #0E7C86 !important;
-        background: transparent !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
+    }
+    .edit-report-btn button:hover {
+        background: #E0F2F1 !important;
+    }
+
+    /* --- Action column cell content (Batch Verification, V2.1 round 3) ---
+       Plain-cell renderer; classes applied via inline span if Gradio sanitises. */
+    .verif-row-action {
+        color: #0E7C86;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .verif-row-action:hover {
+        text-decoration: underline;
+    }
+    .verif-row-confirmed {
+        color: #64748B;
     }
     /* V2.2 verification card frame */
     .verification-card {

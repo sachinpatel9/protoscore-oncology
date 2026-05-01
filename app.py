@@ -57,7 +57,7 @@ from ui.verification import (
 )
 from logic.audit_log import (
     init_verification_state, record_correction,
-    bulk_approve_high_confidence, get_review_gate_status,
+    record_row_confirmation, get_review_gate_status,
     export_audit_log_json,
 )
 from ui.progress import build_progress_html
@@ -322,35 +322,83 @@ def run_extraction(file_path, llm_provider):
 # Batch HITL Verification Handlers (UX-2.1, UX-2.2, FR-4.4)
 # ---------------------------------------------------------------------------
 
-def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
-    """
-    When user clicks a row in the batch verification table, show inline
-    source evidence with PDF thumbnail (UX-2.2).
+# Action column index in the batch verification dataframe (V2.1 r3).
+ACTION_COL_INDEX = 7
 
-    Returns: (inline_evidence_html, evidence_thumbnail_image)
+
+def _resolve_metric_name(result_state, verif_state, row_idx, sort_label=None):
     """
-    empty = (
-        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>',
-        None,
+    Resolve a metric name from a clicked row index.
+
+    Uses verif_state["metric_name_order"] when available, falling back to
+    `get_metric_name_order(result_state)`. Sorting is recomputed at click
+    time so a stale row-index snapshot can never bind to the wrong field.
+    """
+    sort_key = SORT_LABEL_TO_KEY.get(sort_label, "priority") if sort_label else "priority"
+    metric_order = get_metric_name_order(result_state, sort_by=sort_key)
+    if 0 <= row_idx < len(metric_order):
+        return metric_order[row_idx]
+    return None
+
+
+def on_batch_row_select(
+    evt: gr.SelectData,
+    result_state,
+    file_bytes_state,
+    verif_state,
+    sort_label,
+):
+    """
+    Dispatcher for clicks on the batch verification dataframe (V2.1 r3).
+
+    Returns a 6-tuple matching the output bindings:
+        (verification_df, verification_state, confidence_dashboard,
+         review_gate, inline_evidence_html, evidence_thumbnail)
+
+    - Click on the Action column (col_idx == ACTION_COL_INDEX) routes to
+      `on_approve_row`, which flips that row's status to "confirmed" and
+      re-renders the dataframe + dashboards.
+    - Click anywhere else falls through to the existing inline-evidence
+      panel (UX-2.2).
+    """
+    no_op_df = gr.update()
+    no_op_state = gr.update()
+    no_op_dash = gr.update()
+    no_op_gate = gr.update()
+    no_op_evidence = gr.update()
+    no_op_thumb = gr.update()
+
+    empty_evidence = (
+        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>'
     )
 
+    # Parse evt.index → (row, col)
+    if isinstance(evt.index, (list, tuple)) and len(evt.index) >= 2:
+        row_idx, col_idx = int(evt.index[0]), int(evt.index[1])
+    elif isinstance(evt.index, (list, tuple)):
+        row_idx, col_idx = int(evt.index[0]), -1
+    else:
+        row_idx, col_idx = int(evt.index), -1
+
     if result_state is None or not isinstance(result_state, ExtractionResult):
-        return empty
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    # Get row index from selection event
-    row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+    # --- Action column branch: per-row approval ---
+    if col_idx == ACTION_COL_INDEX:
+        return on_approve_row(row_idx, result_state, verif_state, sort_label)
 
-    # Map row index to metric name using sorted order
-    metric_order = get_metric_name_order(result_state)
-    if row_idx < 0 or row_idx >= len(metric_order):
-        return empty
+    # --- Default branch: inline evidence panel ---
+    metric_name = _resolve_metric_name(result_state, verif_state, row_idx, sort_label)
+    if metric_name is None:
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    metric_name = metric_order[row_idx]
     record = result_state.provenance.get(metric_name)
     if not record:
-        return empty
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    # Generate PDF thumbnail for inline evidence
     thumbnail_b64 = None
     thumbnail_pil = None
     if record.citations and file_bytes_state is not None:
@@ -364,7 +412,40 @@ def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
             )
 
     evidence_html = build_inline_evidence_html(record, thumbnail_b64)
-    return evidence_html, thumbnail_pil
+    return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+            evidence_html, thumbnail_pil)
+
+
+def on_approve_row(row_idx, result_state, verif_state, sort_label):
+    """
+    Per-row Approve Update handler (V2.1 r3).
+
+    Resolves the field name at click time from verif_state ordering,
+    flips its status to "confirmed", and re-renders the dataframe +
+    dashboards. Returns the 6-tuple shape used by the row-select
+    dispatcher (df, state, dashboard, gate, evidence, thumbnail).
+    """
+    no_op_evidence = gr.update()
+    no_op_thumb = gr.update()
+
+    if verif_state is None or result_state is None:
+        return (gr.update(), verif_state, gr.update(), gr.update(),
+                no_op_evidence, no_op_thumb)
+
+    metric_name = _resolve_metric_name(result_state, verif_state, row_idx, sort_label)
+    if metric_name is None:
+        return (gr.update(), verif_state, gr.update(), gr.update(),
+                no_op_evidence, no_op_thumb)
+
+    verif_state = record_row_confirmation(verif_state, metric_name)
+
+    sort_key = SORT_LABEL_TO_KEY.get(sort_label, "priority")
+    new_df = build_verification_dataframe(result_state, verif_state, sort_by=sort_key)
+    dashboard_html = build_confidence_dashboard_html(verif_state)
+    gate_html = build_review_gate_html(verif_state)
+
+    return (new_df, verif_state, dashboard_html, gate_html,
+            no_op_evidence, no_op_thumb)
 
 
 def on_batch_df_change(df, verif_state, result_state):
@@ -399,39 +480,13 @@ def on_batch_df_change(df, verif_state, result_state):
         # Check if value changed from current tracked value
         if new_val_str != str(current_val):
             verif_state = record_correction(verif_state, metric_name, new_val_str)
-            df.at[idx, "Status"] = "Corrected"
+            # V2.1 round 3: edit reverts row to displayed Pending and the
+            # Action column re-arms the per-row Approve Update trigger.
+            df.at[idx, "Status"] = "Pending"
+            if "Action" in df.columns:
+                df.at[idx, "Action"] = "✓ Approve Update"
 
     # Rebuild dashboard and gate
-    dashboard_html = build_confidence_dashboard_html(verif_state)
-    gate_html = build_review_gate_html(verif_state)
-
-    return df, verif_state, dashboard_html, gate_html
-
-
-def on_bulk_approve(df, verif_state, result_state):
-    """
-    Bulk-approve all pending fields with confidence >= 0.85 (UX-2.1).
-
-    Returns: (updated_df, updated_verif_state, dashboard_html, gate_html)
-    """
-    if verif_state is None:
-        return df, verif_state, "", ""
-
-    verif_state = bulk_approve_high_confidence(verif_state, threshold=0.85)
-
-    # Update DataFrame status column to match
-    if result_state is not None:
-        metric_order = get_metric_name_order(result_state)
-        for idx, metric_name in enumerate(metric_order):
-            status = verif_state["field_status"].get(metric_name, "pending")
-            if idx < len(df):
-                df.at[idx, "Status"] = {
-                    "pending": "Pending",
-                    "confirmed": "Confirmed",
-                    "corrected": "Corrected",
-                    "bulk_approved": "Approved",
-                }.get(status, "Pending")
-
     dashboard_html = build_confidence_dashboard_html(verif_state)
     gate_html = build_review_gate_html(verif_state)
 
@@ -1129,26 +1184,19 @@ def build_app():
                         scale=2,
                         elem_classes=["verification-sort"],
                     )
-                    bulk_approve_btn = gr.Button(
-                        "Bulk Approve (\u2265 0.85)",
-                        variant="secondary",
-                        size="sm",
-                        scale=2,
-                        elem_classes=["bulk-approve-btn"],
-                    )
                     edit_report_btn = gr.Button(
                         "Edit Report",
                         variant="secondary",
                         size="sm",
                         scale=1,
-                        elem_classes=["edit-report-btn"],
+                        elem_classes=["verif-action-btn", "edit-report-btn"],
                     )
                     confirm_score_btn = gr.Button(
                         "Confirm & Score",
                         variant="primary",
-                        size="lg",
-                        scale=3,
-                        elem_classes=["confirm-score-btn"],
+                        size="sm",
+                        scale=1,
+                        elem_classes=["verif-action-btn", "confirm-score-btn"],
                     )
 
                 # Main batch review dataframe (full-width, read-only by
@@ -1159,14 +1207,14 @@ def build_app():
                         headers=[
                             "Field Name", "Extracted Value",
                             "Source Quote", "Page",
-                            "Priority", "Confidence", "Status",
+                            "Priority", "Confidence", "Status", "Action",
                         ],
-                        datatype=["str", "str", "str", "number", "str", "number", "str"],
+                        datatype=["str", "str", "str", "number", "str", "number", "str", "str"],
                         interactive=False,
                         wrap=True,
                         row_count=1,
-                        column_count=7,
-                        column_limits=(7, 7),
+                        column_count=8,
+                        column_limits=(8, 8),
                     )
 
                 # Inline Source Evidence (UX-2.2) -- full width, below table.
@@ -1304,11 +1352,19 @@ def build_app():
 
         # --- Batch Verification Event Wiring (UX-2.1, UX-2.2, FR-4.4) ---
 
-        # Row selection → inline evidence (UX-2.2)
+        # Row selection → dispatcher: action-column clicks route to per-row
+        # approval; other-column clicks render inline evidence (UX-2.2 / V2.1 r3).
         verification_df.select(
             on_batch_row_select,
-            inputs=[extraction_state, uploaded_file_state],
-            outputs=[inline_evidence_html, evidence_thumbnail],
+            inputs=[
+                extraction_state, uploaded_file_state,
+                verification_state, sort_selector,
+            ],
+            outputs=[
+                verification_df, verification_state,
+                confidence_dashboard_display, review_gate_display,
+                inline_evidence_html, evidence_thumbnail,
+            ],
         )
 
         # Cell edit → track changes & update audit log (FR-4.4)
@@ -1321,17 +1377,7 @@ def build_app():
             ],
         )
 
-        # Bulk approve high-confidence fields (UX-2.1)
-        bulk_approve_btn.click(
-            on_bulk_approve,
-            inputs=[verification_df, verification_state, extraction_state],
-            outputs=[
-                verification_df, verification_state,
-                confidence_dashboard_display, review_gate_display,
-            ],
-        )
-
-        # Sort dropdown -> rebuild dataframe in chosen order (V2.2)
+# Sort dropdown -> rebuild dataframe in chosen order (V2.2)
         sort_selector.change(
             on_sort_change,
             inputs=[sort_selector, extraction_state, verification_state],

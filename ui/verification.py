@@ -78,7 +78,13 @@ def build_verification_dataframe(
     Build the batch review DataFrame from extraction provenance.
 
     Columns: Field Name | Extracted Value | Source Quote | Page |
-             Priority | Confidence | Status
+             Priority | Confidence | Status | Action
+
+    Per V2.1 round 3: the Action column renders a per-row clickable trigger
+    cell. Pending or corrected rows show "✓ Approve Update"; confirmed or
+    bulk_approved rows show "✓ Confirmed". The Status column maps both
+    "pending" and "corrected" to the displayed label "Pending" so an edit
+    visibly reverts a previously confirmed row.
 
     Default sort is "priority" — High → Medium → Low — so the most
     uncertain fields surface at the top. Other sort keys are exposed
@@ -108,16 +114,24 @@ def build_verification_dataframe(
                 quote += "..."
             page = record.citations[0].page_number
 
-        # Determine status from verification state
-        status = "Pending"
+        # Determine status from verification state. Note: "corrected" maps to
+        # "Pending" for display so an edit reverts a previously confirmed row.
+        # The audit log retains the "corrected" distinction underneath.
+        raw_status = "pending"
         if verif_state:
             raw_status = verif_state.get("field_status", {}).get(metric_name, "pending")
-            status = {
-                "pending": "Pending",
-                "confirmed": "Confirmed",
-                "corrected": "Corrected",
-                "bulk_approved": "Approved",
-            }.get(raw_status, "Pending")
+        status = {
+            "pending": "Pending",
+            "confirmed": "Confirmed",
+            "corrected": "Pending",
+            "bulk_approved": "Confirmed",
+        }.get(raw_status, "Pending")
+
+        # Action column: clickable trigger for per-row approval (V2.1 r3).
+        if raw_status in ("confirmed", "bulk_approved"):
+            action = "✓ Confirmed"
+        else:
+            action = "✓ Approve Update"
 
         rows.append({
             "Field Name": record.display_label,
@@ -127,6 +141,7 @@ def build_verification_dataframe(
             "Priority": _priority_label_with_dot(record.confidence_score),
             "Confidence": round(record.confidence_score, 2),
             "Status": status,
+            "Action": action,
         })
 
     df = pd.DataFrame(rows)

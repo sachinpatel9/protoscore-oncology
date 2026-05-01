@@ -157,6 +157,40 @@ def record_confirmation(
     return state_dict
 
 
+def record_row_confirmation(
+    state_dict: dict,
+    field_name: str,
+    user_id: str = "reviewer",
+) -> dict:
+    """
+    Per-row Approve Update handler (V2.1 round 3).
+
+    Flips the given field's status to "confirmed" regardless of whether
+    it was previously "pending" or "corrected" — the reviewer has now
+    explicitly signed off on the current value either way. Appends an
+    audit entry.
+    """
+    if not state_dict or field_name not in state_dict.get("field_status", {}):
+        return state_dict
+
+    current = state_dict["current_values"].get(field_name)
+    confidence = state_dict["confidence_scores"].get(field_name, 0.0)
+
+    state_dict["field_status"][field_name] = "confirmed"
+
+    entry = _make_audit_entry(
+        field_name=field_name,
+        original_value=current,
+        corrected_value=current,
+        action="confirmed",
+        confidence_before=confidence,
+        user_id=user_id,
+    )
+    state_dict["audit_entries"].append(entry)
+
+    return state_dict
+
+
 def bulk_approve_high_confidence(
     state_dict: dict,
     threshold: float = 0.85,
@@ -164,6 +198,11 @@ def bulk_approve_high_confidence(
 ) -> dict:
     """
     Bulk-approve all pending fields with confidence >= threshold.
+
+    NOTE (V2.1 round 3): no longer wired to the UI. The Bulk Approve button
+    was removed in favour of per-row Approve Update. This function is
+    preserved as an unwired library primitive — useful for tests and any
+    future demo-mode auto-approve flow.
 
     Creates an audit entry for each approved field.
 
@@ -213,11 +252,14 @@ def get_review_gate_status(state_dict: dict) -> tuple[bool, str]:
     if state_dict is None:
         return False, "No verification state available. Analyze a protocol first."
 
+    # V2.1 round 3: both "pending" AND "corrected" block the gate. An edit
+    # reverts a confirmed row to "corrected" — the reviewer must explicitly
+    # re-approve it via the per-row Action column before scoring proceeds.
     blocking_fields = []
     for field_name, confidence in state_dict.get("confidence_scores", {}).items():
         if confidence < 0.80:
             status = state_dict.get("field_status", {}).get(field_name, "pending")
-            if status == "pending":
+            if status in ("pending", "corrected"):
                 blocking_fields.append(field_name)
 
     if blocking_fields:
@@ -265,11 +307,14 @@ def get_verification_stats(state_dict: dict) -> dict:
         }
 
     high_confidence = sum(1 for c in confidences.values() if c >= 0.85)
+    # V2.1 round 3: "corrected" rows count as pending for the dashboard,
+    # mirroring the review-gate semantics. Only explicit confirmations
+    # ("confirmed" / "bulk_approved") count as human-verified.
     human_verified = sum(
         1 for s in statuses.values()
-        if s in ("confirmed", "corrected", "bulk_approved")
+        if s in ("confirmed", "bulk_approved")
     )
-    pending = sum(1 for s in statuses.values() if s == "pending")
+    pending = sum(1 for s in statuses.values() if s in ("pending", "corrected"))
 
     corrections_count = sum(
         1 for e in state_dict.get("audit_entries", [])
