@@ -142,30 +142,36 @@ def run_extraction(file_path, llm_provider):
     provider = PROVIDER_BY_LABEL.get(llm_provider, Provider.ANTHROPIC)
     start_time = time.time()
 
-    # Helper: build a 12-element tuple with progress in scorecard slot.
-    # Local extraction (Ollama) takes 5-10 minutes on consumer hardware, so we
-    # surface a hint sub-line in the progress bar to set expectations.
+    # Helper: build a 13-element tuple with progress rendered ONLY in the
+    # upload-section slot (analyze_progress) so users see feedback in
+    # their current viewport. The scorecard slot stays untouched until
+    # the final yield to avoid a duplicate bar below the dashboard tab.
+    # Local extraction (Ollama) takes 5-10 minutes on consumer hardware,
+    # so we surface a hint sub-line to set expectations.
     show_ollama_hint = provider is Provider.OLLAMA
 
     def _progress_tuple(step, fraction):
         elapsed = time.time() - start_time
+        progress_html = build_progress_html(
+            step, fraction, elapsed,
+            show_ollama_hint=show_ollama_hint,
+        )
         return (
             gr.update(), gr.update(),                       # states
-            build_progress_html(                            # scorecard_html
-                step, fraction, elapsed,
-                show_ollama_hint=show_ollama_hint,
-            ),
+            gr.update(),                                    # scorecard_html (left untouched)
             gr.update(), gr.update(),                       # radar, formula
             gr.update(), gr.update(),                       # pdf, error
             gr.update(), gr.update(),                       # verif state, df
             gr.update(), gr.update(), gr.update(),          # dashboards
+            progress_html,                                  # analyze_progress
         )
 
-    # 12-element error tuple matching outputs
+    # 13-element error tuple matching outputs
     error_tuple = (
         None, None, "", None, "",
         None, "",
         None, pd.DataFrame(), "", "", "",
+        "",                                                 # analyze_progress
     )
 
     if provider is Provider.ANTHROPIC and not os.getenv("ANTHROPIC_API_KEY", ""):
@@ -284,6 +290,7 @@ def run_extraction(file_path, llm_provider):
             confidence_dashboard,   # confidence dashboard HTML
             review_gate,            # review gate HTML
             "",                     # inline evidence (empty initially)
+            "",                     # analyze_progress — clear on completion
         )
 
     except Exception as e:
@@ -995,6 +1002,11 @@ def build_app():
                     scale=1,
                 )
             provider_status = gr.HTML(get_provider_status_html("OpenAI (Cloud)"))
+            # Progress slot lives inside the upload section so users see
+            # extraction feedback in their current viewport. The scorecard
+            # slot below the fold also receives the same HTML — both stay
+            # in sync via _progress_tuple.
+            analyze_progress = gr.HTML("")
             error_display = gr.Markdown("")
 
         # =================================================================
@@ -1273,6 +1285,9 @@ def build_app():
                 verification_state, verification_df,
                 confidence_dashboard_display, review_gate_display,
                 inline_evidence_html,
+                # In-viewport progress slot inside the upload section so
+                # users see feedback without scrolling to the scorecard.
+                analyze_progress,
             ],
             # Suppress Gradio's default queue overlay — we render our own
             # single, ETA-aware progress bar via build_progress_html() into
