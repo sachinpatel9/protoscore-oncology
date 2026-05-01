@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from logic.provenance import (
-    ExtractionResult,
     ProvenanceRecord,
     SourceCitation,
     SourceType,

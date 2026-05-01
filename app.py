@@ -11,18 +11,15 @@ Two modes:
 """
 
 import os
-import io
 import time
-import traceback
 from pathlib import Path
 
 import gradio as gr
 import plotly.graph_objects as go
 import pandas as pd
 from dotenv import load_dotenv
-from PIL import Image
 
-from logic.data_manager import load_demo_data, load_from_extraction, get_protocol_details
+from logic.data_manager import load_demo_data, get_protocol_details
 from logic.scoring import calculate_pcs, format_score_formula, format_amendment_risk_formula
 from logic.provenance import ExtractionResult, resolve_all_citations, build_page_index
 from logic.pdf_parser import parse_protocol_pdf, parse_protocol_docx
@@ -36,14 +33,11 @@ from logic.providers import (
 from logic.ollama_utils import (
     check_ollama_running,
     get_installed_models,
-    get_ollama_status_html,
     get_provider_status_html,
-    get_system_ram_gb,
     pull_model,
     recommend_model,
 )
 from ui.layout import CUSTOM_CSS, HEADER_HTML
-from logic.enrollment_projector import project_enrollment
 from ui.scorecard import (
     render_scorecard, build_radar_chart, build_formula_display,
     build_amendment_formula_display, build_enrollment_formula_display,
@@ -54,8 +48,6 @@ from ui.pdf_viewer import (
     build_page_context_html, build_citation_nav_html,
 )
 from ui.verification import (
-    build_verification_html, build_metric_row_html,
-    apply_verified_values, get_verification_defaults,
     # New batch HITL verification (UX-2.1, UX-2.2, FR-4.4, FR-4.5)
     build_verification_dataframe, get_metric_name_order,
     build_inline_evidence_html, generate_pdf_thumbnail_pil,
@@ -64,9 +56,9 @@ from ui.verification import (
     EDITABLE_FIELDS, SORT_LABEL_TO_KEY,
 )
 from logic.audit_log import (
-    init_verification_state, record_correction, record_confirmation,
+    init_verification_state, record_correction,
     bulk_approve_high_confidence, get_review_gate_status,
-    export_audit_log_json, get_verification_stats,
+    export_audit_log_json,
 )
 from ui.progress import build_progress_html
 from ui.export import generate_pdf_report

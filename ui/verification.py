@@ -13,7 +13,6 @@ Design: Clinical Design System
 
 import base64
 import io
-from functools import lru_cache
 
 import pandas as pd
 from PIL import Image

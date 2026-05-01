@@ -3,9 +3,6 @@ Gradio theme and layout constants for ProtoScore V2.
 Clinical design system — cool clinical palette with strict typography hierarchy.
 """
 
-import gradio as gr
-
-
 # -- Clinical Design System palette --
 TEAL = "#0E7C86"       # Primary accent (active states, buttons, highlights)
 NAVY = "#0D1B2A"       # Headings and score numbers

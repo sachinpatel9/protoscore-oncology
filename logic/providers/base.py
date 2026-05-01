@@ -452,7 +452,6 @@ class BaseExtractionPipeline(ABC):
                 "data_points_per_visit": 0,
                 "sample_shipments": 0,
             },
-            "rwd_insights": [],
         }
 
         provenance = {}
