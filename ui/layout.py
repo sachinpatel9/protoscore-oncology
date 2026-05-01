@@ -3,9 +3,6 @@ Gradio theme and layout constants for ProtoScore V2.
 Clinical design system — cool clinical palette with strict typography hierarchy.
 """
 
-import gradio as gr
-
-
 # -- Clinical Design System palette --
 TEAL = "#0E7C86"       # Primary accent (active states, buttons, highlights)
 NAVY = "#0D1B2A"       # Headings and score numbers
@@ -212,24 +209,61 @@ CUSTOM_CSS = """
         border: 1px solid var(--ps-border) !important;
     }
 
-    /* --- Batch verification action buttons --- */
-    .bulk-approve-btn button {
-        background: #F0FDF4 !important;
-        border: 1px solid #BBF7D0 !important;
-        color: #1A7A45 !important;
-        border-radius: 6px !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
+    /* --- Batch verification action buttons ---
+       Shared base: Edit Report (secondary) and Confirm & Score (primary)
+       render as visibly equal peers — same height, padding, radius, weight. */
+    .verif-action-btn button {
+        height: 40px !important;
+        padding: 0 20px !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        font-family: var(--ps-font-body) !important;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
     }
     .confirm-score-btn button {
         background: #0E7C86 !important;
-        color: white !important;
-        width: 100% !important;
+        color: #FFFFFF !important;
+        border: none !important;
     }
-    .confirm-field-btn button {
+    .confirm-score-btn button:hover {
+        background: #0A6770 !important;
+    }
+    .edit-report-btn button {
+        background: transparent !important;
         border: 1px solid #0E7C86 !important;
         color: #0E7C86 !important;
-        background: transparent !important;
+    }
+    .edit-report-btn button:hover {
+        background: #E0F2F1 !important;
+    }
+
+    /* --- Action column cell content (Batch Verification, V2.1 round 3) ---
+       Plain-cell renderer; classes applied via inline span if Gradio sanitises. */
+    .verif-row-action {
+        color: #0E7C86;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .verif-row-action:hover {
+        text-decoration: underline;
+    }
+    .verif-row-confirmed {
+        color: #64748B;
+    }
+    /* V2.2 verification card frame */
+    .verification-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+        padding: 8px !important;
+    }
+    /* Priority cell tinting (5th column = Priority).
+       Belt-and-suspenders: per-cell color via class + dot prefix. */
+    .verification-card td:nth-child(5) {
+        font-weight: 700 !important;
     }
     .export-audit-btn button {
         background: transparent !important;
@@ -276,6 +310,56 @@ CUSTOM_CSS = """
     .ps-card-hover:hover {
         box-shadow: var(--ps-shadow-hover);
         transform: scale(1.01);
+    }
+
+    /* --- Score Reliability three-bar layout (V2.1 round 2) --- */
+    .score-reliability-row {
+        display: grid;
+        grid-template-columns: minmax(160px, 1.4fr) 3fr auto;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+    .score-reliability-row:last-child {
+        margin-bottom: 0;
+    }
+    .score-reliability-label {
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748B;
+        font-weight: 600;
+    }
+    .score-reliability-bar-track {
+        background: #E2E8F0;
+        height: 6px;
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    .score-reliability-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.4s ease-out;
+    }
+    .score-reliability-pct {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 13px;
+        font-weight: 700;
+        text-align: right;
+        min-width: 44px;
+    }
+
+    /* --- Extraction progress: pulse the active step text so the bar
+           visibly "breathes" during long Ollama steps (2-3 min each). --- */
+    .progress-step-active {
+        animation: protoscore-progress-pulse 1.6s ease-in-out infinite;
+    }
+    .progress-step-done { /* static — no animation once done */ }
+    @keyframes protoscore-progress-pulse {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.55; }
     }
 
     /* --- PDF navigation bar --- */

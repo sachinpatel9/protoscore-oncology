@@ -78,10 +78,6 @@ def load_demo_data() -> pd.DataFrame:
             "burden_spikes": [],
             "population_impacts": [],
             "sequencing_risks": [],
-            "rwd_insights": [
-                "Broad eligibility: No ECOG restriction beyond ≤2, captures ~90% of target population.",
-                "Minimal invasive burden: Single baseline biopsy with optional archival tissue accepted.",
-            ],
         },
         # ---------------------------------------------------------------
         # MEDIUM COMPLEXITY: Typical pivotal trial
@@ -199,11 +195,6 @@ def load_demo_data() -> pd.DataFrame:
                 },
             ],
             "sequencing_risks": [],
-            "rwd_insights": [
-                "ECOG 0-1 requirement excludes ~35% of real-world NSCLC patients.",
-                "On-treatment biopsy at Week 9 has historically shown ~22% refusal rate.",
-                "PD-L1 TPS ≥1% enrichment narrows eligible population by ~40%.",
-            ],
         },
         # ---------------------------------------------------------------
         # HIGH COMPLEXITY: Resource-intensive multi-arm trial
@@ -349,13 +340,6 @@ def load_demo_data() -> pd.DataFrame:
                     "risk_description": "Bone Marrow Biopsy and PK Blood Draw are scheduled within 7 days — compounded patient burden.",
                     "page_number": 0,
                 },
-            ],
-            "rwd_insights": [
-                "14-day mandatory hospitalization limits feasibility to major academic centers only.",
-                "6 bone marrow biopsies over 12 months: historical dropout rate ~30% by 4th biopsy.",
-                "ECOG 0 requirement excludes ~55% of R/R AML population.",
-                "Leukapheresis + lymphodepletion + CAR-T infusion sequence creates 3-week patient commitment window.",
-                "CNS assessment with lumbar puncture at screening deters ~15% of otherwise eligible patients.",
             ],
         },
     ]

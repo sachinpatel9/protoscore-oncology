@@ -11,32 +11,33 @@ Two modes:
 """
 
 import os
-import io
 import time
-import traceback
 from pathlib import Path
 
 import gradio as gr
 import plotly.graph_objects as go
 import pandas as pd
 from dotenv import load_dotenv
-from PIL import Image
 
-from logic.data_manager import load_demo_data, load_from_extraction, get_protocol_details
+from logic.data_manager import load_demo_data, get_protocol_details
 from logic.scoring import calculate_pcs, format_score_formula, format_amendment_risk_formula
 from logic.provenance import ExtractionResult, resolve_all_citations, build_page_index
 from logic.pdf_parser import parse_protocol_pdf, parse_protocol_docx
-from logic.ai_extractor import ExtractionPipeline, OllamaExtractionPipeline
+from logic.providers import (
+    ExtractionPipeline,
+    OllamaExtractionPipeline,
+    OpenAIExtractionPipeline,
+    Provider,
+    PROVIDER_BY_LABEL,
+)
 from logic.ollama_utils import (
     check_ollama_running,
     get_installed_models,
-    get_ollama_status_html,
-    get_system_ram_gb,
+    get_provider_status_html,
     pull_model,
     recommend_model,
 )
 from ui.layout import CUSTOM_CSS, HEADER_HTML
-from logic.enrollment_projector import project_enrollment
 from ui.scorecard import (
     render_scorecard, build_radar_chart, build_formula_display,
     build_amendment_formula_display, build_enrollment_formula_display,
@@ -45,22 +46,19 @@ from ui.scorecard import (
 from ui.pdf_viewer import (
     render_pdf_page, build_provenance_panel,
     build_page_context_html, build_citation_nav_html,
-    build_pdf_placeholder_html,
 )
 from ui.verification import (
-    build_verification_html, build_metric_row_html,
-    apply_verified_values, get_verification_defaults,
     # New batch HITL verification (UX-2.1, UX-2.2, FR-4.4, FR-4.5)
     build_verification_dataframe, get_metric_name_order,
     build_inline_evidence_html, generate_pdf_thumbnail_pil,
     generate_pdf_thumbnail_b64, build_confidence_dashboard_html,
     build_review_gate_html, apply_all_verified_values,
-    EDITABLE_FIELDS,
+    EDITABLE_FIELDS, SORT_LABEL_TO_KEY,
 )
 from logic.audit_log import (
-    init_verification_state, record_correction, record_confirmation,
-    bulk_approve_high_confidence, get_review_gate_status,
-    export_audit_log_json, get_verification_stats,
+    init_verification_state, record_correction,
+    record_row_confirmation, record_row_unconfirmation, get_review_gate_status,
+    export_audit_log_json,
 )
 from ui.progress import build_progress_html
 from ui.export import generate_pdf_report
@@ -70,6 +68,10 @@ load_dotenv()
 
 # Default scoring weights
 DEFAULT_WEIGHTS = {"complexity": 0.4, "patient": 0.3, "site": 0.3}
+
+# `PROVIDER_BY_LABEL` is imported from `logic.providers.registry` — it lives
+# alongside the `Provider` enum it depends on, so adding a new provider only
+# touches one file.
 
 
 # ---------------------------------------------------------------------------
@@ -109,19 +111,6 @@ def run_demo_analysis(protocol_id: str):
     if any(protocol.get(k) for k in ("procedure_weight_summary", "burden_spikes", "population_impacts", "sequencing_risks")):
         formula_html += build_enhancement_formula_display(protocol)
 
-    # Insights panel
-    insights = protocol.get("rwd_insights", [])
-    insights_html = '<div style="padding:8px;">'
-    for insight in insights:
-        insights_html += f"""
-        <div style="background:#FFFBF0; padding:10px; border-radius:8px;
-                    border-left:3px solid #E68A00; margin:8px 0;
-                    font-size:13px; color:#0D1B2A;">
-            {insight}
-        </div>
-        """
-    insights_html += "</div>"
-
     # Protocol info
     info_html = f"""
     <div style="font-size:13px; color:#64748B; padding:8px;">
@@ -131,55 +120,73 @@ def run_demo_analysis(protocol_id: str):
     </div>
     """
 
-    return scorecard_html, radar_fig, formula_html, insights_html, info_html
+    return scorecard_html, radar_fig, formula_html, info_html
 
 
 # ---------------------------------------------------------------------------
 # Upload Mode Handlers
 # ---------------------------------------------------------------------------
 
-def run_extraction(file_path, llm_provider, progress=gr.Progress()):
+def run_extraction(file_path, llm_provider):
     """
     Run the full extraction pipeline on an uploaded document.
 
     Generator that yields intermediate progress updates to the scorecard panel,
     then yields the final result tuple with all display components.
+
+    Progress is rendered exclusively via build_progress_html() into the
+    scorecard slot. Do NOT add a gr.Progress() parameter — Gradio's built-in
+    progress overlay paints onto every output component being updated and
+    visually duplicates the progress bar across panels.
     """
-    use_ollama = llm_provider == "Ollama (Local)"
+    provider = PROVIDER_BY_LABEL.get(llm_provider, Provider.ANTHROPIC)
     start_time = time.time()
 
-    # Helper: build a 13-element tuple with progress in scorecard slot
-    placeholder_html = build_pdf_placeholder_html()
+    # Helper: build a 13-element tuple with progress rendered ONLY in the
+    # upload-section slot (analyze_progress) so users see feedback in
+    # their current viewport. The scorecard slot stays untouched until
+    # the final yield to avoid a duplicate bar below the dashboard tab.
+    # Local extraction (Ollama) takes 5-10 minutes on consumer hardware,
+    # so we surface a hint sub-line to set expectations.
+    show_ollama_hint = provider is Provider.OLLAMA
 
     def _progress_tuple(step, fraction):
         elapsed = time.time() - start_time
+        progress_html = build_progress_html(
+            step, fraction, elapsed,
+            show_ollama_hint=show_ollama_hint,
+        )
         return (
             gr.update(), gr.update(),                       # states
-            build_progress_html(step, fraction, elapsed),   # scorecard_html
+            gr.update(),                                    # scorecard_html (left untouched)
             gr.update(), gr.update(),                       # radar, formula
             gr.update(), gr.update(),                       # pdf, error
             gr.update(), gr.update(),                       # verif state, df
             gr.update(), gr.update(), gr.update(),          # dashboards
-            placeholder_html,                               # pdf_empty_state
+            progress_html,                                  # analyze_progress
         )
 
-    # 13-element error tuple matching outputs (includes pdf_empty_state)
+    # 13-element error tuple matching outputs
     error_tuple = (
         None, None, "", None, "",
         None, "",
         None, pd.DataFrame(), "", "", "",
-        "",  # pdf_empty_state cleared on error
+        "",                                                 # analyze_progress
     )
 
-    if not use_ollama:
-        api_key = os.getenv("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            yield error_tuple[:6] + (
-                "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
-            ) + error_tuple[7:]
-            return
+    if provider is Provider.ANTHROPIC and not os.getenv("ANTHROPIC_API_KEY", ""):
+        yield error_tuple[:6] + (
+            "ANTHROPIC_API_KEY not found. Please set it in your .env file.",
+        ) + error_tuple[7:]
+        return
 
-    if use_ollama and not check_ollama_running():
+    if provider is Provider.OPENAI and not os.getenv("OPENAI_API_KEY", ""):
+        yield error_tuple[:6] + (
+            "OPENAI_API_KEY not found. Please set it in your .env file.",
+        ) + error_tuple[7:]
+        return
+
+    if provider is Provider.OLLAMA and not check_ollama_running():
         yield error_tuple[:6] + (
             "Ollama is not running. Install from [ollama.com](https://ollama.com), "
             "then run `ollama serve`.",
@@ -194,29 +201,18 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 
         # Step 1: Parse document
         yield _progress_tuple("Parsing document...", 0.10)
-        progress(0.10, desc="Parsing document...")
         if is_word:
             parsed_doc = parse_protocol_docx(file_bytes)
         else:
             parsed_doc = parse_protocol_pdf(file_bytes)
 
-        # Step 2: Run extraction pipeline with progress callback
-        def progress_cb(step: str, fraction: float):
-            progress(fraction, desc=step)
-
-        if use_ollama:
+        if provider is Provider.OLLAMA:
             installed = get_installed_models()
             model, tier, rationale = recommend_model(installed)
 
             if model not in installed:
                 yield _progress_tuple(f"Pulling {model}...", 0.12)
-                progress(0.12, desc=f"Pulling {model} (best for your system)...")
-                success = pull_model(
-                    model,
-                    progress_callback=lambda msg, frac: progress(
-                        0.12 + frac * 0.08, desc=msg
-                    ),
-                )
+                success = pull_model(model)
                 if not success:
                     yield error_tuple[:6] + (
                         f"Failed to pull model `{model}`. "
@@ -225,21 +221,21 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
                     return
 
             pipeline = OllamaExtractionPipeline(model, parsed_doc)
+        elif provider is Provider.OPENAI:
+            pipeline = OpenAIExtractionPipeline(os.getenv("OPENAI_API_KEY", ""), parsed_doc)
         else:
-            api_key = os.getenv("ANTHROPIC_API_KEY", "")
-            pipeline = ExtractionPipeline(api_key, parsed_doc)
+            pipeline = ExtractionPipeline(os.getenv("ANTHROPIC_API_KEY", ""), parsed_doc)
 
         yield _progress_tuple("Running extraction pipeline...", 0.20)
-        result = pipeline.run(progress_callback=progress_cb)
+        result = pipeline.run()
         result.source_filename = filename
         result.total_pages = parsed_doc.total_pages
 
         # Step 3: Resolve citation bounding boxes
         yield _progress_tuple("Resolving source citations...", 0.95)
-        progress(0.98, desc="Resolving source citations...")
         result = resolve_all_citations(result, parsed_doc)
 
-        # Step 4: Initialize verification state (FR-4.4, UX-2.1)
+        # Step 4: Initialize verification state
         verif_state = init_verification_state(result.provenance)
 
         # Step 5: Score (initial, before user verification)
@@ -274,14 +270,12 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
         if not is_word:
             page_img = render_pdf_page(file_bytes, 1)
 
-        # Step 6: Build batch verification table (UX-2.1)
+        # Step 6: Build batch verification table
         batch_df = build_verification_dataframe(result, verif_state)
         confidence_dashboard = build_confidence_dashboard_html(verif_state)
         review_gate = build_review_gate_html(verif_state)
 
-        progress(1.0, desc="Extraction complete.")
-
-        # Final yield — full results, clear pdf_empty_state
+        # Final yield — full results
         yield (
             result,                 # extraction state
             file_bytes,             # uploaded file bytes state
@@ -296,11 +290,31 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
             confidence_dashboard,   # confidence dashboard HTML
             review_gate,            # review gate HTML
             "",                     # inline evidence (empty initially)
-            "",                     # pdf_empty_state — cleared
+            "",                     # analyze_progress — clear on completion
         )
 
     except Exception as e:
-        error_msg = f"Extraction failed: {str(e)}"
+        # Tailored message for OpenAI rate-limit failures so the user knows
+        # this is an account/billing limit, not a code bug.
+        try:
+            import openai
+            is_openai_429 = isinstance(e, openai.RateLimitError)
+        except Exception:
+            is_openai_429 = False
+
+        if is_openai_429:
+            from logic.providers.openai import DEFAULT_MODEL as _OPENAI_DEFAULT
+            active_model = os.getenv("OPENAI_MODEL", _OPENAI_DEFAULT)
+            error_msg = (
+                f"**OpenAI rate limit reached** for `{active_model}`. The extraction "
+                "makes 5 sequential calls; retry with backoff already ran 3× without "
+                "success. Options: wait ~60s and retry, switch to **Claude (Cloud)** "
+                "or **Ollama (Local)** in the dropdown, set `OPENAI_MODEL` in `.env` "
+                "to a higher-RPM model, or upgrade at "
+                "https://platform.openai.com/account/billing."
+            )
+        else:
+            error_msg = f"Extraction failed: {str(e)}"
         yield error_tuple[:6] + (error_msg,) + error_tuple[7:]
 
 
@@ -308,35 +322,83 @@ def run_extraction(file_path, llm_provider, progress=gr.Progress()):
 # Batch HITL Verification Handlers (UX-2.1, UX-2.2, FR-4.4)
 # ---------------------------------------------------------------------------
 
-def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
-    """
-    When user clicks a row in the batch verification table, show inline
-    source evidence with PDF thumbnail (UX-2.2).
+# Action column index in the batch verification dataframe (V2.1 r3).
+ACTION_COL_INDEX = 7
 
-    Returns: (inline_evidence_html, evidence_thumbnail_image)
+
+def _resolve_metric_name(result_state, verif_state, row_idx, sort_label=None):
     """
-    empty = (
-        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>',
-        None,
+    Resolve a metric name from a clicked row index.
+
+    Uses verif_state["metric_name_order"] when available, falling back to
+    `get_metric_name_order(result_state)`. Sorting is recomputed at click
+    time so a stale row-index snapshot can never bind to the wrong field.
+    """
+    sort_key = SORT_LABEL_TO_KEY.get(sort_label, "priority") if sort_label else "priority"
+    metric_order = get_metric_name_order(result_state, sort_by=sort_key)
+    if 0 <= row_idx < len(metric_order):
+        return metric_order[row_idx]
+    return None
+
+
+def on_batch_row_select(
+    evt: gr.SelectData,
+    result_state,
+    file_bytes_state,
+    verif_state,
+    sort_label,
+):
+    """
+    Click handler for the batch verification dataframe.
+
+    Returns a 6-tuple matching the output bindings:
+        (verification_df, verification_state, confidence_dashboard,
+         review_gate, inline_evidence_html, evidence_thumbnail)
+
+    Per V2.1 round 4: the Action column is now a `bool` checkbox toggled
+    via `verification_df.change` (which is gated by `interactive=True`).
+    This handler no longer dispatches by column — every click falls through
+    to the existing inline-evidence panel (UX-2.2). Approval is wired through
+    `on_batch_df_change` which detects the checkbox state transition.
+    """
+    no_op_df = gr.update()
+    no_op_state = gr.update()
+    no_op_dash = gr.update()
+    no_op_gate = gr.update()
+    no_op_evidence = gr.update()
+    no_op_thumb = gr.update()
+
+    empty_evidence = (
+        '<div style="color:#94A3B8; padding:20px;">Select a row to see source evidence.</div>'
     )
 
+    # Parse evt.index → (row, col)
+    if isinstance(evt.index, (list, tuple)) and len(evt.index) >= 2:
+        row_idx, col_idx = int(evt.index[0]), int(evt.index[1])
+    elif isinstance(evt.index, (list, tuple)):
+        row_idx, col_idx = int(evt.index[0]), -1
+    else:
+        row_idx, col_idx = int(evt.index), -1
+
     if result_state is None or not isinstance(result_state, ExtractionResult):
-        return empty
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    # Get row index from selection event
-    row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+    # Action column clicks are handled by `on_batch_df_change` via the
+    # checkbox toggle (interactive-gated). This handler only renders evidence.
+    _ = col_idx  # acknowledged-but-unused; kept for future column-aware UX.
 
-    # Map row index to metric name using sorted order
-    metric_order = get_metric_name_order(result_state)
-    if row_idx < 0 or row_idx >= len(metric_order):
-        return empty
+    # --- Default branch: inline evidence panel ---
+    metric_name = _resolve_metric_name(result_state, verif_state, row_idx, sort_label)
+    if metric_name is None:
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    metric_name = metric_order[row_idx]
     record = result_state.provenance.get(metric_name)
     if not record:
-        return empty
+        return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+                empty_evidence, None)
 
-    # Generate PDF thumbnail for inline evidence
     thumbnail_b64 = None
     thumbnail_pil = None
     if record.citations and file_bytes_state is not None:
@@ -350,13 +412,58 @@ def on_batch_row_select(evt: gr.SelectData, result_state, file_bytes_state):
             )
 
     evidence_html = build_inline_evidence_html(record, thumbnail_b64)
-    return evidence_html, thumbnail_pil
+    return (no_op_df, no_op_state, no_op_dash, no_op_gate,
+            evidence_html, thumbnail_pil)
+
+
+def on_approve_row(row_idx, result_state, verif_state, sort_label):
+    """
+    Per-row Approve Update handler (V2.1 r3).
+
+    Resolves the field name at click time from verif_state ordering,
+    flips its status to "confirmed", and re-renders the dataframe +
+    dashboards. Returns the 6-tuple shape used by the row-select
+    dispatcher (df, state, dashboard, gate, evidence, thumbnail).
+    """
+    no_op_evidence = gr.update()
+    no_op_thumb = gr.update()
+
+    if verif_state is None or result_state is None:
+        return (gr.update(), verif_state, gr.update(), gr.update(),
+                no_op_evidence, no_op_thumb)
+
+    metric_name = _resolve_metric_name(result_state, verif_state, row_idx, sort_label)
+    if metric_name is None:
+        return (gr.update(), verif_state, gr.update(), gr.update(),
+                no_op_evidence, no_op_thumb)
+
+    verif_state = record_row_confirmation(verif_state, metric_name)
+
+    sort_key = SORT_LABEL_TO_KEY.get(sort_label, "priority")
+    new_df = build_verification_dataframe(result_state, verif_state, sort_by=sort_key)
+    dashboard_html = build_confidence_dashboard_html(verif_state)
+    gate_html = build_review_gate_html(verif_state)
+
+    return (new_df, verif_state, dashboard_html, gate_html,
+            no_op_evidence, no_op_thumb)
 
 
 def on_batch_df_change(df, verif_state, result_state):
     """
-    When user edits a cell in the batch verification DataFrame,
-    detect changes and record corrections in the audit log (FR-4.4).
+    Handle dataframe-edit events on the batch verification table.
+
+    This handler is wired to `verification_df.change`, which only fires
+    when `interactive=True` — meaning every state transition below is
+    gated behind the Edit Report toggle.
+
+    Two kinds of edits are detected per row:
+    1. **Action checkbox toggle** (V2.1 round 4) — when the bool Action
+       cell flips:
+         - False → True on a pending/corrected row → record_row_confirmation
+         - True → False on a confirmed row → record_row_unconfirmation
+    2. **Extracted Value edit** (FR-4.4) — when an editable field's
+       value changes, record_correction; this also forces the Action
+       checkbox back to False since the row needs re-approval.
 
     Returns: (updated_df, updated_verif_state, dashboard_html, gate_html)
     """
@@ -365,7 +472,6 @@ def on_batch_df_change(df, verif_state, result_state):
 
     metric_order = get_metric_name_order(result_state)
 
-    # Iterate rows and detect value changes
     for idx, row in df.iterrows():
         if idx >= len(metric_order):
             continue
@@ -374,79 +480,41 @@ def on_batch_df_change(df, verif_state, result_state):
         new_val_str = str(row.get("Extracted Value", ""))
         original_val = verif_state["original_values"].get(metric_name)
         current_val = verif_state["current_values"].get(metric_name)
+        prior_status = verif_state["field_status"].get(metric_name, "pending")
 
-        # Only track changes for editable fields
-        if metric_name not in EDITABLE_FIELDS:
-            # Revert non-editable fields to original value
+        # --- Detect Action checkbox state transition --------------------
+        # The cell may be bool (gradio normalised) or a stringified bool
+        # depending on Gradio's serialisation; coerce defensively.
+        new_action = row.get("Action", False)
+        if isinstance(new_action, str):
+            new_action = new_action.strip().lower() in ("true", "1", "yes")
+        new_action = bool(new_action)
+        was_confirmed = prior_status in ("confirmed", "bulk_approved")
+
+        value_changed_this_row = False
+
+        # --- Extracted Value edit (only for editable fields) ------------
+        if metric_name in EDITABLE_FIELDS:
+            if new_val_str != str(current_val):
+                verif_state = record_correction(verif_state, metric_name, new_val_str)
+                value_changed_this_row = True
+                # Force checkbox back to False — value changed, row must
+                # be re-approved. Update the displayed Status too.
+                df.at[idx, "Status"] = "Pending"
+                df.at[idx, "Action"] = False
+        else:
+            # Revert non-editable cell edits to the original value.
             if str(original_val) != new_val_str:
                 df.at[idx, "Extracted Value"] = str(original_val)
-            continue
 
-        # Check if value changed from current tracked value
-        if new_val_str != str(current_val):
-            verif_state = record_correction(verif_state, metric_name, new_val_str)
-            df.at[idx, "Status"] = "Corrected"
-
-    # Rebuild dashboard and gate
-    dashboard_html = build_confidence_dashboard_html(verif_state)
-    gate_html = build_review_gate_html(verif_state)
-
-    return df, verif_state, dashboard_html, gate_html
-
-
-def on_confirm_selected_field(df, verif_state, result_state):
-    """
-    Confirm the currently visible fields that are still pending.
-    Since gr.Dataframe doesn't track a single "selected" row persistently,
-    this confirms all pending fields that haven't been modified.
-
-    Returns: (updated_df, updated_verif_state, dashboard_html, gate_html)
-    """
-    if verif_state is None or result_state is None:
-        return df, verif_state, "", ""
-
-    metric_order = get_metric_name_order(result_state)
-
-    # Find first pending low-confidence field and confirm it
-    for idx, metric_name in enumerate(metric_order):
-        status = verif_state["field_status"].get(metric_name, "pending")
-        confidence = verif_state["confidence_scores"].get(metric_name, 1.0)
-
-        if status == "pending" and confidence < 0.80:
-            verif_state = record_confirmation(verif_state, metric_name)
-            if idx < len(df):
+        # --- Action toggle (only if value didn't just change) -----------
+        if not value_changed_this_row:
+            if new_action and not was_confirmed:
+                verif_state = record_row_confirmation(verif_state, metric_name)
                 df.at[idx, "Status"] = "Confirmed"
-            break  # Confirm one at a time
-
-    dashboard_html = build_confidence_dashboard_html(verif_state)
-    gate_html = build_review_gate_html(verif_state)
-
-    return df, verif_state, dashboard_html, gate_html
-
-
-def on_bulk_approve(df, verif_state, result_state):
-    """
-    Bulk-approve all pending fields with confidence >= 0.85 (UX-2.1).
-
-    Returns: (updated_df, updated_verif_state, dashboard_html, gate_html)
-    """
-    if verif_state is None:
-        return df, verif_state, "", ""
-
-    verif_state = bulk_approve_high_confidence(verif_state, threshold=0.85)
-
-    # Update DataFrame status column to match
-    if result_state is not None:
-        metric_order = get_metric_name_order(result_state)
-        for idx, metric_name in enumerate(metric_order):
-            status = verif_state["field_status"].get(metric_name, "pending")
-            if idx < len(df):
-                df.at[idx, "Status"] = {
-                    "pending": "Pending",
-                    "confirmed": "Confirmed",
-                    "corrected": "Corrected",
-                    "bulk_approved": "Approved",
-                }.get(status, "Pending")
+            elif (not new_action) and was_confirmed:
+                verif_state = record_row_unconfirmation(verif_state, metric_name)
+                df.at[idx, "Status"] = "Pending"
 
     dashboard_html = build_confidence_dashboard_html(verif_state)
     gate_html = build_review_gate_html(verif_state)
@@ -461,13 +529,17 @@ def on_confirm_and_score(result_state, verif_state):
     The review gate blocks scoring if any field with confidence < 0.80
     has not been explicitly confirmed or corrected (UX-2.1 constraint).
 
-    Returns: (result, scorecard_html, radar_fig, formula_html, gate_html)
+    Returns: (result, scorecard_html, radar_fig, formula_html, gate_html,
+             verification_df_update, edit_mode_state, edit_btn_update)
     """
+    df_lock = gr.update(interactive=False)
+    edit_btn_reset = gr.update(value="Edit Report")
+
     if result_state is None:
-        return None, "", None, "", ""
+        return None, "", None, "", "", df_lock, False, edit_btn_reset
 
     if verif_state is None:
-        return result_state, "", None, "", ""
+        return result_state, "", None, "", "", df_lock, False, edit_btn_reset
 
     # Review gate check (UX-2.1)
     is_satisfied, message = get_review_gate_status(verif_state)
@@ -480,7 +552,9 @@ def on_confirm_and_score(result_state, verif_state):
             </span>
         </div>
         """
-        return result_state, "", None, "", gate_html
+        # Don't force-lock the dataframe if the gate fails — user still
+        # needs to fix things. Keep current edit state.
+        return result_state, "", None, "", gate_html, gr.update(), gr.update(), gr.update()
 
     # Apply all corrections from verification state
     result = apply_all_verified_values(result_state, verif_state)
@@ -513,7 +587,25 @@ def on_confirm_and_score(result_state, verif_state):
 
     gate_html = build_review_gate_html(verif_state)
 
-    return result, scorecard_html, radar_fig, formula_html, gate_html
+    return (
+        result, scorecard_html, radar_fig, formula_html, gate_html,
+        df_lock, False, edit_btn_reset,
+    )
+
+
+def on_toggle_edit_mode(currently_editing):
+    """Flip the verification dataframe between read-only and editable."""
+    new_state = not bool(currently_editing)
+    btn_label = "Cancel Edits" if new_state else "Edit Report"
+    return gr.update(interactive=new_state), new_state, gr.update(value=btn_label)
+
+
+def on_sort_change(sort_label, result_state, verif_state):
+    """Re-sort the verification dataframe in response to dropdown change."""
+    if result_state is None or not isinstance(result_state, ExtractionResult):
+        return gr.update()
+    sort_key = SORT_LABEL_TO_KEY.get(sort_label, "priority")
+    return build_verification_dataframe(result_state, verif_state, sort_by=sort_key)
 
 
 def on_export_audit_log(verif_state, result_state):
@@ -823,7 +915,7 @@ def run_simulator(protocol_id, new_visits, new_biopsies, current_mode, result_st
 
 
 def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, protocol_id):
-    """Calculate time-to-full-enrollment with sensitivity table (FR-E6.4)."""
+    """Calculate time-to-full-enrollment with sensitivity table."""
     num_sites = int(num_sites)
     target_n = int(target_n)
 
@@ -851,7 +943,7 @@ def run_enrollment_calculator(num_sites, target_n, current_mode, result_state, p
     # Base estimate
     base_months = target_n / (rate * num_sites)
 
-    # Sensitivity table (±20% variance per FR-E6.4)
+    # Sensitivity table (±20% variance)
     scenarios = [
         ("Pessimistic (-20%)", rate * 0.8),
         ("Base Case", rate),
@@ -980,8 +1072,8 @@ def build_app():
             )
             with gr.Row():
                 llm_provider = gr.Dropdown(
-                    choices=["Claude API", "Ollama (Local)"],
-                    value="Claude API",
+                    choices=["OpenAI (Cloud)", "Claude (Cloud)", "Ollama (Local)"],
+                    value="OpenAI (Cloud)",
                     label="LLM Provider",
                     interactive=True,
                     scale=1,
@@ -993,7 +1085,12 @@ def build_app():
                     size="lg",
                     scale=1,
                 )
-            ollama_status = gr.HTML("", visible=False)
+            provider_status = gr.HTML(get_provider_status_html("OpenAI (Cloud)"))
+            # Progress slot lives inside the upload section so users see
+            # extraction feedback in their current viewport. The scorecard
+            # slot below the fold also receives the same HTML — both stay
+            # in sync via _progress_tuple.
+            analyze_progress = gr.HTML("")
             error_display = gr.Markdown("")
 
         # =================================================================
@@ -1014,37 +1111,22 @@ def build_app():
         with gr.Tabs():
 
             # --- Tab 1: Assessment Dashboard (Split-Screen) ---
+            #
+            # LEFT column: scorecard + radar (the score readout).
+            # RIGHT column: everything PDF/source/export/formula related,
+            # stacked top-to-bottom so the user has a single vertical scan
+            # for "what was the source, where do I jump, how do I export,
+            # and how was the score calculated."
             with gr.Tab("Assessment Dashboard"):
                 with gr.Row(equal_height=False):
-                    # LEFT: Scorecard
+                    # LEFT: Scorecard + radar only.
                     with gr.Column(scale=1):
                         scorecard_html = gr.HTML("")
                         radar_chart = gr.Plot(label="Multi-Dimensional Risk", elem_classes=["radar-plot"])
-                        formula_html = gr.HTML("")
 
-                        # PDF Export (UX-3.1, UX-3.2)
-                        with gr.Row():
-                            export_pdf_btn = gr.Button(
-                                "Export PDF Report",
-                                variant="primary",
-                                size="sm",
-                            )
-                        pdf_download = gr.File(
-                            label="PDF Report Download",
-                            visible=False,
-                        )
-
-                        # Bidirectional Navigation: metric selector (UX-1.2)
-                        gr.Markdown("### Navigate to Source")
-                        dashboard_metric_selector = gr.Radio(
-                            choices=[],
-                            label="Select metric to jump to its source in the PDF",
-                            interactive=True,
-                        )
-
-                    # RIGHT: PDF Viewer
+                    # RIGHT: PDF viewer → citation nav → Navigate to Source
+                    # → Export PDF → all 4 formula panes (stacked).
                     with gr.Column(scale=1):
-                        pdf_empty_state = gr.HTML(build_pdf_placeholder_html())
                         pdf_page_display = gr.Image(
                             label="Protocol PDF",
                             type="pil",
@@ -1070,6 +1152,38 @@ def build_app():
                         # Inline evidence panel
                         dashboard_evidence_html = gr.HTML("")
 
+                        # Bidirectional Navigation: metric selector (UX-1.2),
+                        # positioned directly under the citation bar so the
+                        # user can filter through metrics and see exactly
+                        # what content the LLM cited as its source.
+                        gr.Markdown("### Navigate to Source")
+                        dashboard_metric_selector = gr.Radio(
+                            choices=[],
+                            label="Select metric to jump to its source in the PDF",
+                            interactive=True,
+                        )
+
+                        # PDF Export (UX-3.1, UX-3.2) — sits below the
+                        # navigator so the user can export immediately
+                        # after reviewing sources.
+                        with gr.Row():
+                            export_pdf_btn = gr.Button(
+                                "Export PDF Report",
+                                variant="primary",
+                                size="sm",
+                            )
+                        pdf_download = gr.File(
+                            label="PDF Report Download",
+                            visible=False,
+                        )
+
+                        # All 4 formula panes (Score Formula + Amendment
+                        # Risk + Enrollment Projection + Enhanced Pillars)
+                        # stacked at the bottom of the right column. The
+                        # formula_html component already concatenates them
+                        # in render_demo_analysis / run_extraction.
+                        formula_html = gr.HTML("")
+
             # --- Tab 2: Batch Verification (HITL — UX-2.1, UX-2.2) ---
             with gr.Tab("Batch Verification"):
                 # Confidence Dashboard (FR-4.5)
@@ -1078,73 +1192,63 @@ def build_app():
                 # Review Gate Banner (UX-2.1)
                 review_gate_display = gr.HTML("")
 
-                with gr.Row(equal_height=False):
-                    # LEFT: Batch Review Table (UX-2.1)
-                    with gr.Column(scale=3):
-                        gr.Markdown("### Extraction Verification")
-                        gr.Markdown(
-                            "Review all extracted values below. "
-                            "Click a row to see source evidence. "
-                            "Edit values in the **Extracted Value** column "
-                            "(editable fields: I/E Count, Endpoints, Visits, Invasive Procedures)."
-                        )
+                # Edit-mode state (V2.2): drives dataframe interactivity.
+                edit_mode_state = gr.State(False)
 
-                        # Bulk approve button (UX-2.1)
-                        bulk_approve_btn = gr.Button(
-                            "Bulk Approve High-Confidence Fields (\u2265 0.85)",
-                            variant="secondary",
-                            size="sm",
-                            elem_classes=["bulk-approve-btn"],
-                        )
+                gr.Markdown("### Extraction Verification")
+                gr.Markdown(
+                    "Review all extracted values below. "
+                    "Click a row to see source evidence. "
+                    "Click **Edit Report** to enable edits "
+                    "(editable fields: I/E Count, Endpoints, Visits, Invasive Procedures)."
+                )
 
-                        # Main batch review dataframe
-                        verification_df = gr.Dataframe(
-                            headers=[
-                                "Field Name", "Extracted Value",
-                                "Source Quote", "Page",
-                                "Confidence", "Status",
-                            ],
-                            datatype=["str", "str", "str", "number", "number", "str"],
-                            interactive=True,
-                            wrap=True,
-                            row_count=(1, "dynamic"),
-                            col_count=(6, "fixed"),
-                        )
+                # Actions row: sort dropdown + 3 buttons. Primary CTA
+                # (Confirm & Score) dominates via larger scale.
+                with gr.Row(elem_classes=["verification-actions"]):
+                    sort_selector = gr.Dropdown(
+                        choices=list(SORT_LABEL_TO_KEY.keys()),
+                        value="Priority (High \u2192 Low)",
+                        label="Sort by",
+                        scale=2,
+                        elem_classes=["verification-sort"],
+                    )
+                    edit_report_btn = gr.Button(
+                        "Edit Report",
+                        variant="secondary",
+                        size="sm",
+                        scale=1,
+                        elem_classes=["verif-action-btn", "edit-report-btn"],
+                    )
+                    confirm_score_btn = gr.Button(
+                        "Confirm & Score",
+                        variant="primary",
+                        size="sm",
+                        scale=1,
+                        elem_classes=["verif-action-btn", "confirm-score-btn"],
+                    )
 
-                        # Action buttons
-                        with gr.Row():
-                            confirm_field_btn = gr.Button(
-                                "Confirm Next Low-Confidence Field",
-                                variant="secondary",
-                                size="sm",
-                                scale=1,
-                                elem_classes=["confirm-field-btn"],
-                            )
-                            confirm_score_btn = gr.Button(
-                                "Confirm & Score",
-                                variant="primary",
-                                size="lg",
-                                scale=2,
-                                elem_classes=["confirm-score-btn"],
-                            )
+                # Main batch review dataframe (full-width, read-only by
+                # default; Edit Report flips `interactive`). Wrapped in a
+                # card-styled gr.Group for visual framing.
+                with gr.Group(elem_classes=["verification-card"]):
+                    verification_df = gr.Dataframe(
+                        headers=[
+                            "Field Name", "Extracted Value",
+                            "Source Quote", "Page",
+                            "Priority", "Confidence", "Status", "Action",
+                        ],
+                        datatype=["str", "str", "str", "number", "str", "number", "str", "bool"],
+                        interactive=False,
+                        wrap=True,
+                        row_count=1,
+                        column_count=8,
+                        column_limits=(8, 8),
+                    )
 
-                        # Audit log export (FR-4.4)
-                        with gr.Row():
-                            export_audit_btn = gr.Button(
-                                "Export Audit Log (JSON)",
-                                variant="secondary",
-                                size="sm",
-                                elem_classes=["export-audit-btn"],
-                            )
-                            audit_download = gr.File(
-                                label="Audit Log Download",
-                                visible=False,
-                            )
-
-                    # RIGHT: Inline Source Evidence (UX-2.2)
-                    with gr.Column(scale=2):
-                        gr.Markdown("### Source Evidence")
-                        inline_evidence_html = gr.HTML(
+                # Inline Source Evidence (UX-2.2) -- full width, below table.
+                gr.Markdown("### Source Evidence")
+                inline_evidence_html = gr.HTML(
                             '<div style="display:flex; flex-direction:column; align-items:center; '
                             'justify-content:center; min-height:300px; padding:40px 20px;">'
                             '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" '
@@ -1155,12 +1259,25 @@ def build_app():
                             '<div style="font-size:13px; color:#94A3B8; margin-top:12px; '
                             'text-align:center; font-family:\'Nunito Sans\', sans-serif;">'
                             'Click any row to view source evidence</div></div>'
-                        )
-                        evidence_thumbnail = gr.Image(
-                            label="Jump to Source in PDF →",
-                            type="pil",
-                            height=400,
-                        )
+                )
+                evidence_thumbnail = gr.Image(
+                    label="Jump to Source in PDF",
+                    type="pil",
+                    height=400,
+                )
+
+                # Audit log export (FR-4.4)
+                with gr.Row():
+                    export_audit_btn = gr.Button(
+                        "Export Audit Log (JSON)",
+                        variant="secondary",
+                        size="sm",
+                        elem_classes=["export-audit-btn"],
+                    )
+                    audit_download = gr.File(
+                        label="Audit Log Download",
+                        visible=False,
+                    )
 
             # --- Tab 3: Optimization Simulator ---
             with gr.Tab("Optimization Simulator"):
@@ -1200,12 +1317,6 @@ def build_app():
                     with gr.Column(scale=2):
                         enroll_result_html = gr.HTML("")
 
-            # --- Tab 4: AI Insights ---
-            with gr.Tab("AI Insights"):
-                insights_html = gr.HTML(
-                    '<div style="color:#94A3B8; padding:20px;">Select a protocol to see insights.</div>'
-                )
-
         # =================================================================
         # EVENT WIRING
         # =================================================================
@@ -1223,22 +1334,20 @@ def build_app():
             outputs=[upload_section, demo_section],
         )
 
-        # LLM provider toggle — show Ollama status when selected
-        def on_provider_change(provider):
-            if provider == "Ollama (Local)":
-                return gr.update(visible=True, value=get_ollama_status_html())
-            return gr.update(visible=False, value="")
+        # LLM provider toggle — refresh the connection-status pill
+        def on_provider_change(provider_label):
+            return gr.update(value=get_provider_status_html(provider_label))
 
         llm_provider.change(
             on_provider_change, inputs=[llm_provider],
-            outputs=[ollama_status],
+            outputs=[provider_status],
         )
 
         # Demo selector change
         demo_selector.change(
             run_demo_analysis,
             inputs=[demo_selector],
-            outputs=[scorecard_html, radar_chart, formula_html, insights_html, demo_info],
+            outputs=[scorecard_html, radar_chart, formula_html, demo_info],
         )
 
         # Analyze button click — now outputs to batch verification tab too
@@ -1253,8 +1362,16 @@ def build_app():
                 verification_state, verification_df,
                 confidence_dashboard_display, review_gate_display,
                 inline_evidence_html,
-                pdf_empty_state,
+                # In-viewport progress slot inside the upload section so
+                # users see feedback without scrolling to the scorecard.
+                analyze_progress,
             ],
+            # Suppress Gradio's default queue overlay — we render our own
+            # single, ETA-aware progress bar via build_progress_html() into
+            # the scorecard slot. The overlay otherwise paints onto every
+            # output component being yielded, producing visible duplication
+            # across panels.
+            show_progress="hidden",
         ).then(
             # After extraction, populate the dashboard metric selector (UX-1.2)
             get_metric_choices,
@@ -1264,11 +1381,19 @@ def build_app():
 
         # --- Batch Verification Event Wiring (UX-2.1, UX-2.2, FR-4.4) ---
 
-        # Row selection → inline evidence (UX-2.2)
+        # Row selection → dispatcher: action-column clicks route to per-row
+        # approval; other-column clicks render inline evidence (UX-2.2 / V2.1 r3).
         verification_df.select(
             on_batch_row_select,
-            inputs=[extraction_state, uploaded_file_state],
-            outputs=[inline_evidence_html, evidence_thumbnail],
+            inputs=[
+                extraction_state, uploaded_file_state,
+                verification_state, sort_selector,
+            ],
+            outputs=[
+                verification_df, verification_state,
+                confidence_dashboard_display, review_gate_display,
+                inline_evidence_html, evidence_thumbnail,
+            ],
         )
 
         # Cell edit → track changes & update audit log (FR-4.4)
@@ -1281,33 +1406,29 @@ def build_app():
             ],
         )
 
-        # Confirm next low-confidence field
-        confirm_field_btn.click(
-            on_confirm_selected_field,
-            inputs=[verification_df, verification_state, extraction_state],
-            outputs=[
-                verification_df, verification_state,
-                confidence_dashboard_display, review_gate_display,
-            ],
+# Sort dropdown -> rebuild dataframe in chosen order (V2.2)
+        sort_selector.change(
+            on_sort_change,
+            inputs=[sort_selector, extraction_state, verification_state],
+            outputs=[verification_df],
         )
 
-        # Bulk approve high-confidence fields (UX-2.1)
-        bulk_approve_btn.click(
-            on_bulk_approve,
-            inputs=[verification_df, verification_state, extraction_state],
-            outputs=[
-                verification_df, verification_state,
-                confidence_dashboard_display, review_gate_display,
-            ],
+        # Edit Report toggle -> flip dataframe interactivity (V2.2)
+        edit_report_btn.click(
+            on_toggle_edit_mode,
+            inputs=[edit_mode_state],
+            outputs=[verification_df, edit_mode_state, edit_report_btn],
         )
 
-        # Confirm & Score with review gate (UX-2.1 constraint)
+        # Confirm & Score with review gate (UX-2.1 constraint).
+        # Also resets edit mode -> read-only on success (V2.2).
         confirm_score_btn.click(
             on_confirm_and_score,
             inputs=[extraction_state, verification_state],
             outputs=[
                 extraction_state, scorecard_html,
                 radar_chart, formula_html, review_gate_display,
+                verification_df, edit_mode_state, edit_report_btn,
             ],
         )
 
@@ -1389,7 +1510,7 @@ def build_app():
         app.load(
             run_demo_analysis,
             inputs=[demo_selector],
-            outputs=[scorecard_html, radar_chart, formula_html, insights_html, demo_info],
+            outputs=[scorecard_html, radar_chart, formula_html, demo_info],
         )
 
     return app

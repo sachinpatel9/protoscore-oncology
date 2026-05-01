@@ -14,7 +14,6 @@ FR-E6.4: Time-to-full-enrollment estimate with sensitivity table
 """
 
 import logging
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 

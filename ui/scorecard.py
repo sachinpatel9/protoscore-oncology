@@ -7,7 +7,6 @@ radar chart, and formula transparency display.
 Design: Clinical Design System
 """
 
-import gradio as gr
 import plotly.graph_objects as go
 
 
@@ -112,23 +111,76 @@ def build_radar_chart(breakdown: dict, protocol_name: str = "") -> go.Figure:
     return fig
 
 
-def build_formula_display(formula: dict) -> str:
-    """Build the calculation transparency display (FR 4.3)."""
+def build_formula_card(
+    title: str,
+    body_html: str,
+    *,
+    header_color: str = "#0E7C86",
+    padding: int = 12,
+    margin_top: int = 8,
+    line_height: float = 1.6,
+    title_margin_bottom: int = 8,
+    title_inline: bool = False,
+) -> str:
+    """Single canonical formula-card HTML builder.
+
+    All four formula displays in this module share the same card shell
+    (background, border, uppercase title, monospace body). This helper
+    renders the shell; callers construct ``body_html`` in their preferred
+    shape (rows, bullets, sub-blocks).
+
+    ``title_inline`` controls a small style-ordering quirk preserved from
+    the pre-refactor templates so output stays byte-identical:
+    - ``True``  -> margin-bottom appears *after* letter-spacing in the
+      title's style string and the title text sits inline with the div
+      (used by the original ``build_formula_display``).
+    - ``False`` -> margin-bottom appears *after* font-weight and the
+      title text is on its own line inside the div (used by the three
+      compact-variant cards).
+    """
+    if title_inline:
+        title_block = (
+            f'<div style="font-size:11px; color:{header_color}; font-weight:600;\n'
+            f'                    text-transform:uppercase; letter-spacing:0.08em;\n'
+            f'                    margin-bottom:{title_margin_bottom}px; font-family:\'Nunito Sans\', sans-serif;">{title}</div>'
+        )
+    else:
+        title_block = (
+            f'<div style="font-size:11px; color:{header_color}; font-weight:600; margin-bottom:{title_margin_bottom}px;\n'
+            f'                    text-transform:uppercase; letter-spacing:0.08em;\n'
+            f'                    font-family:\'Nunito Sans\', sans-serif;">\n'
+            f'            {title}\n'
+            f'        </div>'
+        )
     return f"""
-    <div style="background:#F0F4F8; padding:16px; border-radius:12px;
-                border:1px solid #E2E8F0; margin-top:12px;">
-        <div style="font-size:11px; color:#0E7C86; font-weight:600;
-                    text-transform:uppercase; letter-spacing:0.08em;
-                    margin-bottom:10px; font-family:'Nunito Sans', sans-serif;">SCORE FORMULA (Calculation Transparency)</div>
-        <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.8;">
-            <div><strong style="color:#0E7C86;">Complexity:</strong> {formula['complexity']}</div>
-            <div><strong style="color:#E68A00;">Patient Burden:</strong> {formula['patient_burden']}</div>
-            <div><strong style="color:#C0392B;">Site Burden:</strong> {formula['site_burden']}</div>
-            <hr style="border-color:#E2E8F0; margin:8px 0;">
-            <div><strong style="color:#0D1B2A;">Total PCS:</strong> {formula['total']}</div>
+    <div style="background:#F0F4F8; padding:{padding}px; border-radius:12px;
+                border:1px solid #E2E8F0; margin-top:{margin_top}px;">
+        {title_block}
+        <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:{line_height};">
+            {body_html}
         </div>
     </div>
     """
+
+
+def build_formula_display(formula: dict) -> str:
+    """Build the calculation transparency display (FR 4.3)."""
+    body = (
+        f"<div><strong style=\"color:#0E7C86;\">Complexity:</strong> {formula['complexity']}</div>\n"
+        f"            <div><strong style=\"color:#E68A00;\">Patient Burden:</strong> {formula['patient_burden']}</div>\n"
+        f"            <div><strong style=\"color:#C0392B;\">Site Burden:</strong> {formula['site_burden']}</div>\n"
+        f"            <hr style=\"border-color:#E2E8F0; margin:8px 0;\">\n"
+        f"            <div><strong style=\"color:#0D1B2A;\">Total PCS:</strong> {formula['total']}</div>"
+    )
+    return build_formula_card(
+        title="SCORE FORMULA (Calculation Transparency)",
+        body_html=body,
+        padding=16,
+        margin_top=12,
+        line_height=1.8,
+        title_margin_bottom=10,
+        title_inline=True,
+    )
 
 
 def _tier_color(tier: str) -> str:
@@ -220,20 +272,12 @@ def build_amendment_formula_display(amendment_formula: dict) -> str:
     for f in findings:
         findings_html += f'<div style="margin-left:12px; color:#334155;">&#x2022; {f}</div>'
 
-    return f"""
-    <div style="background:#F0F4F8; padding:12px; border-radius:12px;
-                border:1px solid #E2E8F0; margin-top:8px;">
-        <div style="font-size:11px; color:{color}; font-weight:600; margin-bottom:8px;
-                    text-transform:uppercase; letter-spacing:0.08em;
-                    font-family:'Nunito Sans', sans-serif;">
-            AMENDMENT RISK FORMULA (FR-D5.2)
-        </div>
-        <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.6;">
-            <div>{formula}</div>
-            {findings_html}
-        </div>
-    </div>
-    """
+    body = f"<div>{formula}</div>\n            {findings_html}"
+    return build_formula_card(
+        title="AMENDMENT RISK FORMULA",
+        body_html=body,
+        header_color=color,
+    )
 
 
 def build_enrollment_card(enrollment_data: dict) -> str:
@@ -344,22 +388,16 @@ def build_enrollment_formula_display(enrollment_data: dict) -> str:
         )
     refs_html = "<br>".join(f"&nbsp;&nbsp;{s}" for s in ref_strs)
 
-    return f"""
-    <div style="background:#F0F4F8; padding:12px; border-radius:12px;
-                border:1px solid #E2E8F0; margin-top:8px;">
-        <div style="font-size:11px; color:#0E7C86; font-weight:600; margin-bottom:8px;
-                    text-transform:uppercase; letter-spacing:0.08em;
-                    font-family:'Nunito Sans', sans-serif;">
-            ENROLLMENT PROJECTION (FR-E6.3)
-        </div>
-        <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.6;">
-            <div>Rate = weighted k-NN average of top-5 similar trials</div>
-            <div>= <strong>{rate}</strong> pts/site/month (80% CI: [{ci[0]}, {ci[1]}])</div>
-            <div style="margin-top:6px;">Reference trials:</div>
-            {refs_html}
-        </div>
-    </div>
-    """
+    body = (
+        f"<div>Rate = weighted k-NN average of top-5 similar trials</div>\n"
+        f"            <div>= <strong>{rate}</strong> pts/site/month (80% CI: [{ci[0]}, {ci[1]}])</div>\n"
+        f"            <div style=\"margin-top:6px;\">Reference trials:</div>\n"
+        f"            {refs_html}"
+    )
+    return build_formula_card(
+        title="ENROLLMENT PROJECTION",
+        body_html=body,
+    )
 
 
 def build_burden_spikes_card(spikes: list) -> str:
@@ -404,7 +442,7 @@ def build_burden_spikes_card(spikes: list) -> str:
             Burden Spikes Detected ({len(spikes)} visit{'s' if len(spikes) != 1 else ''})
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Visits with &ge;3 invasive procedures or &ge;4 total hours (FR-A1.5)
+            Visits with &ge;3 invasive procedures or &ge;4 total hours
         </div>
         {spike_rows}
     </div>
@@ -455,7 +493,7 @@ def build_population_impact_card(impacts: list) -> str:
             Population Impact Estimates ({len(impacts)} criteria)
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Estimated eligible-pool reduction per restrictive criterion (FR-B2.5)
+            Estimated eligible-pool reduction per restrictive criterion
         </div>
         {impact_rows}
     </div>
@@ -494,7 +532,7 @@ def build_sequencing_risks_card(risks: list) -> str:
             Sequencing Risks ({len(risks)} flagged)
         </div>
         <div style="font-size:12px; color:#94A3B8; margin-bottom:10px;">
-            Invasive procedures within 14 days of each other (FR-C3.3)
+            Invasive procedures within 14 days of each other
         </div>
         {risk_rows}
     </div>
@@ -517,7 +555,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#0E7C86; font-weight:600;">PROCEDURE WEIGHTS (FR-A1.3)</div>
+            <div style="color:#0E7C86; font-weight:600;">PROCEDURE WEIGHTS</div>
             <div>{mapped} procedures mapped ({coverage}% coverage)</div>
             <div>Total patient time: <strong>{total_min:.0f} minutes ({total_min / 60:.1f} hours)</strong></div>
             {top_html}
@@ -531,7 +569,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#C0392B; font-weight:600;">BURDEN SPIKES (FR-A1.5)</div>
+            <div style="color:#C0392B; font-weight:600;">BURDEN SPIKES</div>
             <div>{len(spikes)} visit(s) flagged: {spike_strs}</div>
         </div>
         """)
@@ -543,7 +581,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#E68A00; font-weight:600;">POPULATION IMPACT (FR-B2.5)</div>
+            <div style="color:#E68A00; font-weight:600;">POPULATION IMPACT</div>
             <div>{len(impacts)} restrictive criteria: {impact_strs}</div>
         </div>
         """)
@@ -555,7 +593,7 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
         )
         parts.append(f"""
         <div style="margin-bottom:10px;">
-            <div style="color:#E68A00; font-weight:600;">SEQUENCING RISKS (FR-C3.3)</div>
+            <div style="color:#E68A00; font-weight:600;">SEQUENCING RISKS</div>
             <div>{len(risks)} risk(s): {risk_strs}</div>
         </div>
         """)
@@ -563,19 +601,10 @@ def build_enhancement_formula_display(protocol_data: dict) -> str:
     if not parts:
         return ""
 
-    return f"""
-    <div style="background:#F0F4F8; padding:12px; border-radius:12px;
-                border:1px solid #E2E8F0; margin-top:8px;">
-        <div style="font-size:11px; color:#0E7C86; font-weight:600; margin-bottom:8px;
-                    text-transform:uppercase; letter-spacing:0.08em;
-                    font-family:'Nunito Sans', sans-serif;">
-            ENHANCED PILLARS A/B/C
-        </div>
-        <div style="font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px; color:#334155; line-height:1.6;">
-            {"".join(parts)}
-        </div>
-    </div>
-    """
+    return build_formula_card(
+        title="ENHANCED PILLARS A/B/C",
+        body_html="".join(parts),
+    )
 
 
 def build_score_reliability_header(verif_state: dict | None) -> str:
@@ -592,54 +621,57 @@ def build_score_reliability_header(verif_state: dict | None) -> str:
     if total == 0:
         return ""
 
-    high_pct = stats["high_confidence_pct"]
+    mean_conf_pct = stats["mean_confidence_pct"]
     verified_pct = stats["verified_pct"]
     pending_pct = stats["pending_pct"]
     corrections = stats["corrections_count"]
 
-    # Grade: A = all verified, B = >80%, C = >50%, D = <50%
-    if verified_pct == 100:
-        grade, grade_color = "A", "#1A7A45"
-    elif verified_pct >= 80:
-        grade, grade_color = "B", "#3A9CA5"
-    elif verified_pct >= 50:
-        grade, grade_color = "C", "#E68A00"
-    else:
-        grade, grade_color = "D", "#C0392B"
+    bars = [
+        ("Reliability Confidence", mean_conf_pct, "#0E7C86"),
+        ("Verified Extraction Values", verified_pct, "#1A7A45"),
+        ("Pending Confirmation Extracted Values", pending_pct, "#E68A00"),
+    ]
 
-    verified_bar = min(verified_pct, 100)
-    pending_bar = min(pending_pct, 100 - verified_bar)
+    bar_rows = "".join(
+        f"""
+        <div class="score-reliability-row">
+            <div class="score-reliability-label">{label}</div>
+            <div class="score-reliability-bar-track"
+                 style="background:#E2E8F0; height:6px; border-radius:4px; overflow:hidden;
+                        box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);">
+                <div class="score-reliability-bar-fill"
+                     style="width:{pct}%; background:{color}; height:100%;
+                            border-radius:4px; transition: width 0.4s ease-out;"></div>
+            </div>
+            <div class="score-reliability-pct"
+                 style="color:{color}; font-family:'JetBrains Mono','Fira Code',monospace;
+                        font-size:13px; font-weight:700; text-align:right; min-width:44px;">{pct}%</div>
+        </div>
+        """
+        for label, pct, color in bars
+    )
 
     corrections_html = ""
     if corrections > 0:
         corrections_html = (
-            f'<span style="color:#0E7C86;">{corrections} correction'
-            f'{"s" if corrections != 1 else ""}</span>'
+            f'<span style="color:#0E7C86; margin-left:8px;">'
+            f'&middot; {corrections} correction{"s" if corrections != 1 else ""}</span>'
         )
 
     return f"""
-    <div style="background:#FFFFFF; padding:10px 14px; border-radius:12px;
-                border:1px solid {grade_color}; margin-bottom:12px;
+    <div style="background:#FFFFFF; padding:12px 14px; border-radius:12px;
+                border:1px solid #E2E8F0; margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:10px;">
             <span style="font-size:11px; color:#64748B; text-transform:uppercase;
                         letter-spacing:0.08em; font-weight:600;
                         font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
-            <span style="background:{grade_color}; color:white; padding:4px 12px;
-                        border-radius:14px; font-size:14px; font-weight:800;
-                        font-family:'Lora', Georgia, serif;">{grade}</span>
+            <span style="font-size:11px; color:#94A3B8;">
+                {total} fields total{corrections_html}
+            </span>
         </div>
-        <div style="display:flex; height:6px; border-radius:3px; overflow:hidden;
-                    margin:6px 0 4px 0; background:#E2E8F0;">
-            <div style="width:{verified_bar}%; background:#1A7A45;"></div>
-            <div style="width:{pending_bar}%; background:#E68A00;"></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.65em; color:#94A3B8;">
-            <span style="color:#1A7A45;">Verified: {verified_pct}%</span>
-            <span>High Conf: {high_pct}%</span>
-            <span style="color:#E68A00;">Pending: {pending_pct}%</span>
-            {corrections_html}
-        </div>
+        {bar_rows}
     </div>
     """
 
@@ -724,8 +756,11 @@ def render_scorecard(score_result: dict, protocol_data: dict,
     if sequencing_risks:
         html_parts.append(build_sequencing_risks_card(sequencing_risks))
 
-    # Formula transparency
-    if formula:
-        html_parts.append(build_formula_display(formula))
+    # Formula transparency is rendered separately by the dedicated
+    # `formula_html` Gradio component in the right column (built by
+    # `build_formula_display`/amendment/enrollment/enhancement). The
+    # `formula` arg is accepted here for backward compatibility but no
+    # longer rendered to avoid duplication.
+    _ = formula
 
     return "\n".join(html_parts)

@@ -288,17 +288,45 @@ def call_ollama_chat(
 # Status helpers for the UI
 # ---------------------------------------------------------------------------
 
-def get_ollama_status_html() -> str:
-    """Build a compact status pill for the Ollama connection and model."""
-    pill_style = (
-        "display:flex; align-items:center; gap:6px; "
-        "padding:6px 12px; border-radius:6px; margin:4px 0; "
-        "font-size:10px; font-family:'Nunito Sans', sans-serif;"
+_PILL_STYLE = (
+    "display:flex; align-items:center; gap:6px; "
+    "padding:6px 12px; border-radius:6px; margin:4px 0; "
+    "font-size:10px; font-family:'Nunito Sans', sans-serif;"
+)
+
+
+def _connected_pill(text: str) -> str:
+    return (
+        f'<div style="{_PILL_STYLE} background:#F0FDF4; border:1px solid #BBF7D0;">'
+        f'<span style="color:#1A7A45;">&#x25CF;</span> '
+        f'<span style="color:#334155;">{text}</span>'
+        f'</div>'
     )
 
+
+def _error_pill(text: str) -> str:
+    return (
+        f'<div style="{_PILL_STYLE} background:#FEF2F2; border:1px solid #FECACA;">'
+        f'<span style="color:#C0392B;">&#x25CF;</span> '
+        f'<span style="color:#334155;">{text}</span>'
+        f'</div>'
+    )
+
+
+def _warn_pill(text: str) -> str:
+    return (
+        f'<div style="{_PILL_STYLE} background:#FFFBEB; border:1px solid #FDE68A;">'
+        f'<span style="color:#E68A00;">&#x25CF;</span> '
+        f'<span style="color:#334155;">{text}</span>'
+        f'</div>'
+    )
+
+
+def get_ollama_status_html() -> str:
+    """Build a compact status pill for the Ollama connection and model."""
     if not check_ollama_running():
         return (
-            f'<div style="{pill_style} background:#FEF2F2; border:1px solid #FECACA;">'
+            f'<div style="{_PILL_STYLE} background:#FEF2F2; border:1px solid #FECACA;">'
             '<span style="color:#C0392B;">&#x25CF;</span> '
             '<span style="color:#334155;">Not Running &middot; '
             'Install from <a href="https://ollama.com" target="_blank" '
@@ -312,17 +340,30 @@ def get_ollama_status_html() -> str:
     model, tier, rationale = recommend_model(installed)
 
     if model in installed:
-        return (
-            f'<div style="{pill_style} background:#F0FDF4; border:1px solid #BBF7D0;">'
-            f'<span style="color:#1A7A45;">&#x25CF;</span> '
-            f'<span style="color:#334155;">Connected &middot; {model} &middot; '
-            f'Tier {tier}</span>'
-            f'</div>'
-        )
+        return _connected_pill("Connected to Ollama Locally")
 
-    return (
-        f'<div style="{pill_style} background:#FFFBEB; border:1px solid #FDE68A;">'
-        f'<span style="color:#E68A00;">&#x25CF;</span> '
-        f'<span style="color:#334155;">No Model &middot; Will auto-pull on Analyze</span>'
-        f'</div>'
-    )
+    return _warn_pill("No Model &middot; Will auto-pull on Analyze")
+
+
+def get_provider_status_html(label: str) -> str:
+    """
+    Build a connection-status pill for the selected LLM provider.
+
+    Cloud providers show a green pill when their API key env var is set,
+    and a red pill with an actionable message when missing.
+    """
+    if label == "OpenAI (Cloud)":
+        if os.getenv("OPENAI_API_KEY", ""):
+            # Resolve the active OpenAI model once so the pill matches the model
+            # the pipeline will actually call (default + OPENAI_MODEL override).
+            from logic.providers.openai import DEFAULT_MODEL as _OPENAI_DEFAULT
+            active_model = os.getenv("OPENAI_MODEL", _OPENAI_DEFAULT)
+            return _connected_pill(f"Connected &middot; {active_model} &middot; Cloud")
+        return _error_pill("OPENAI_API_KEY missing &mdash; add it to .env")
+    if label == "Claude (Cloud)":
+        if os.getenv("ANTHROPIC_API_KEY", ""):
+            return _connected_pill("Connected &middot; claude-4.6-sonnet &middot; Cloud")
+        return _error_pill("ANTHROPIC_API_KEY missing &mdash; add it to .env")
+    if label == "Ollama (Local)":
+        return get_ollama_status_html()
+    return ""

@@ -13,7 +13,6 @@ Design: Clinical Design System
 
 import base64
 import io
-from functools import lru_cache
 
 import pandas as pd
 from PIL import Image
@@ -39,22 +38,69 @@ EDITABLE_FIELDS = {
 # Batch Review DataFrame Builder (UX-2.1)
 # ---------------------------------------------------------------------------
 
+# Confidence-based review priority (V2.2 batch verification revamp).
+# Thresholds: High < 0.70, Medium [0.70, 0.85), Low >= 0.85.
+PRIORITY_RANK = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def _priority_for(confidence: float) -> tuple[str, str]:
+    """Return (label, hex_color) for confidence-based review priority."""
+    if confidence < 0.70:
+        return ("High", "#C0392B")  # red
+    if confidence < 0.85:
+        return ("Medium", "#E68A00")  # amber
+    return ("Low", "#1A7A45")  # green
+
+
+def _priority_label_with_dot(confidence: float) -> str:
+    """Unicode-dot prefixed label for the gr.Dataframe Priority cell."""
+    label, _ = _priority_for(confidence)
+    dot = {"High": "\U0001F534", "Medium": "\U0001F7E1", "Low": "\U0001F7E2"}[label]
+    return f"{dot} {label}"
+
+
+def _strip_priority_dot(cell: str) -> str:
+    """Reverse of _priority_label_with_dot — extract bare High/Medium/Low."""
+    if not isinstance(cell, str):
+        return str(cell)
+    for key in PRIORITY_RANK:
+        if key in cell:
+            return key
+    return cell
+
+
 def build_verification_dataframe(
     result: ExtractionResult,
     verif_state: dict | None = None,
+    sort_by: str = "priority",
 ) -> pd.DataFrame:
     """
     Build the batch review DataFrame from extraction provenance.
 
     Columns: Field Name | Extracted Value | Source Quote | Page |
-             Confidence | Status
+             Priority | Confidence | Status | Action
 
-    Rows are sorted: needs-review (< 0.80) first, then by confidence
-    ascending, so the most uncertain fields appear at the top.
+    Per V2.1 round 4: the Action column is a real boolean checkbox
+    (Gradio `bool` datatype). Confirmed/bulk_approved rows render as
+    True (checked); pending/corrected rows render as False (unchecked).
+    Toggling the checkbox fires `verification_df.change`, which only
+    fires when `interactive=True` — so the per-row approve action is
+    naturally gated behind the Edit Report toggle alongside cell edits.
+
+    The Status column maps both "pending" and "corrected" to the
+    displayed label "Pending" so an edit visibly reverts a previously
+    confirmed row.
+
+    Default sort is "priority" — High → Medium → Low — so the most
+    uncertain fields surface at the top. Other sort keys are exposed
+    via the Sort dropdown above the dataframe in the Batch Verification
+    tab.
 
     Args:
         result: ExtractionResult from the AI pipeline
         verif_state: Optional verification state dict for status column
+        sort_by: One of "priority", "confidence_asc", "confidence_desc",
+                 "status", "field_name".
 
     Returns:
         pandas DataFrame for gr.Dataframe display.
@@ -73,39 +119,84 @@ def build_verification_dataframe(
                 quote += "..."
             page = record.citations[0].page_number
 
-        # Determine status from verification state
-        status = "Pending"
+        # Determine status from verification state. Note: "corrected" maps to
+        # "Pending" for display so an edit reverts a previously confirmed row.
+        # The audit log retains the "corrected" distinction underneath.
+        raw_status = "pending"
         if verif_state:
             raw_status = verif_state.get("field_status", {}).get(metric_name, "pending")
-            status = {
-                "pending": "Pending",
-                "confirmed": "Confirmed",
-                "corrected": "Corrected",
-                "bulk_approved": "Approved",
-            }.get(raw_status, "Pending")
+        status = {
+            "pending": "Pending",
+            "confirmed": "Confirmed",
+            "corrected": "Pending",
+            "bulk_approved": "Confirmed",
+        }.get(raw_status, "Pending")
+
+        # Action column: bool checkbox for per-row approval (V2.1 r4).
+        # True = confirmed/bulk_approved; False = pending/corrected.
+        action = raw_status in ("confirmed", "bulk_approved")
 
         rows.append({
             "Field Name": record.display_label,
             "Extracted Value": str(record.value),
             "Source Quote": quote,
             "Page": page,
+            "Priority": _priority_label_with_dot(record.confidence_score),
             "Confidence": round(record.confidence_score, 2),
             "Status": status,
+            "Action": action,
         })
 
     df = pd.DataFrame(rows)
     if df.empty:
         return df
 
-    # Sort: needs review first (confidence < 0.80), then ascending confidence
-    df["_sort_key"] = df["Confidence"].apply(lambda c: 0 if c < 0.80 else 1)
-    df = df.sort_values(["_sort_key", "Confidence"]).drop(columns=["_sort_key"])
+    df = _sort_verification_df(df, sort_by)
     df = df.reset_index(drop=True)
-
     return df
 
 
-def get_metric_name_order(result: ExtractionResult) -> list[str]:
+def _sort_verification_df(df: pd.DataFrame, sort_by: str) -> pd.DataFrame:
+    """Apply a sort_by key to the verification dataframe."""
+    if df.empty:
+        return df
+
+    key = (sort_by or "priority").lower()
+    if key == "priority":
+        df = df.assign(
+            _prio=df["Priority"].map(lambda c: PRIORITY_RANK.get(_strip_priority_dot(c), 99))
+        )
+        df = df.sort_values(["_prio", "Confidence"]).drop(columns=["_prio"])
+    elif key in ("confidence_asc", "confidence (low → high)"):
+        df = df.sort_values("Confidence", ascending=True)
+    elif key in ("confidence_desc", "confidence (high → low)"):
+        df = df.sort_values("Confidence", ascending=False)
+    elif key == "status":
+        df = df.sort_values("Status")
+    elif key in ("field_name", "field name (a → z)"):
+        df = df.sort_values("Field Name")
+    else:
+        df = df.assign(
+            _prio=df["Priority"].map(lambda c: PRIORITY_RANK.get(_strip_priority_dot(c), 99))
+        )
+        df = df.sort_values(["_prio", "Confidence"]).drop(columns=["_prio"])
+    return df
+
+
+# Map dropdown labels → sort_by keys understood by build_verification_dataframe.
+SORT_LABEL_TO_KEY = {
+    "Priority (High → Low)": "priority",
+    "Confidence (Low → High)": "confidence_asc",
+    "Confidence (High → Low)": "confidence_desc",
+    "Status": "status",
+    "Field Name (A → Z)": "field_name",
+}
+
+
+def get_metric_name_order(
+    result: ExtractionResult,
+    sort_by: str = "priority",
+) -> list[str]:
     """
     Return ordered list of metric names matching DataFrame row order.
 
@@ -115,10 +206,20 @@ def get_metric_name_order(result: ExtractionResult) -> list[str]:
     for metric_name, record in result.provenance.items():
         if metric_name.startswith("amendment_finding_"):
             continue
-        entries.append((metric_name, record.confidence_score))
+        label, _ = _priority_for(record.confidence_score)
+        entries.append((metric_name, record.confidence_score, label, record.display_label))
 
-    # Same sort as build_verification_dataframe
-    entries.sort(key=lambda e: (0 if e[1] < 0.80 else 1, e[1]))
+    key = (sort_by or "priority").lower()
+    if key == "priority":
+        entries.sort(key=lambda e: (PRIORITY_RANK.get(e[2], 99), e[1]))
+    elif key in ("confidence_asc", "confidence (low → high)"):
+        entries.sort(key=lambda e: e[1])
+    elif key in ("confidence_desc", "confidence (high → low)"):
+        entries.sort(key=lambda e: -e[1])
+    elif key in ("field_name", "field name (a → z)"):
+        entries.sort(key=lambda e: e[3])
+    else:
+        entries.sort(key=lambda e: (PRIORITY_RANK.get(e[2], 99), e[1]))
     return [e[0] for e in entries]
 
 
@@ -301,82 +402,57 @@ def build_confidence_dashboard_html(verif_state: dict | None) -> str:
     if total == 0:
         return ""
 
-    high_pct = stats["high_confidence_pct"]
+    mean_conf_pct = stats["mean_confidence_pct"]
     verified_pct = stats["verified_pct"]
     pending_pct = stats["pending_pct"]
     corrections = stats["corrections_count"]
 
-    # Determine grade
-    if verified_pct == 100:
-        grade, grade_color = "A", "#1A7A45"
-    elif verified_pct >= 80:
-        grade, grade_color = "B", "#3A9CA5"
-    elif verified_pct >= 50:
-        grade, grade_color = "C", "#E68A00"
-    else:
-        grade, grade_color = "D", "#C0392B"
+    bars = [
+        ("Reliability Confidence", mean_conf_pct, "#0E7C86"),
+        ("Verified Extraction Values", verified_pct, "#1A7A45"),
+        ("Pending Confirmation Extracted Values", pending_pct, "#E68A00"),
+    ]
 
-    # Calculate bar widths (stacked, total = 100%)
-    verified_bar = min(verified_pct, 100)
-    highconf_bar = max(0, min(high_pct - verified_pct, 100 - verified_bar))
-    pending_bar = min(pending_pct, 100 - verified_bar - highconf_bar)
-
-    corrections_col = ""
-    if corrections > 0:
-        corrections_col = f"""
-            <div>
-                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{corrections}</div>
-                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
-                            letter-spacing:0.06em;">Corrections</div>
+    bar_rows = "".join(
+        f"""
+        <div class="score-reliability-row">
+            <div class="score-reliability-label">{label}</div>
+            <div class="score-reliability-bar-track"
+                 style="background:#E2E8F0; height:6px; border-radius:4px; overflow:hidden;
+                        box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);">
+                <div class="score-reliability-bar-fill"
+                     style="width:{pct}%; background:{color}; height:100%;
+                            border-radius:4px; transition: width 0.4s ease-out;"></div>
             </div>
+            <div class="score-reliability-pct"
+                 style="color:{color}; font-family:'JetBrains Mono','Fira Code',monospace;
+                        font-size:13px; font-weight:700; text-align:right; min-width:44px;">{pct}%</div>
+        </div>
         """
+        for label, pct, color in bars
+    )
+
+    corrections_html = ""
+    if corrections > 0:
+        corrections_html = (
+            f'<span style="color:#0E7C86; margin-left:8px;">'
+            f'&middot; {corrections} correction{"s" if corrections != 1 else ""}</span>'
+        )
 
     return f"""
     <div style="background:#FFFFFF; padding:16px; border-radius:12px;
                 border:1px solid #E2E8F0; margin-bottom:12px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="font-size:11px; color:#64748B; text-transform:uppercase;
-                            letter-spacing:0.08em; font-weight:600;
-                            font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
-                <span style="font-size:11px; color:#94A3B8; margin-left:8px;">
-                    {stats['total']} fields total
-                </span>
-            </div>
-            <span style="background:{grade_color}; color:white; padding:6px 18px;
-                         border-radius:20px; font-size:20px; font-weight:800;
-                         font-family:'Lora', Georgia, serif;">{grade}</span>
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:12px;">
+            <span style="font-size:11px; color:#64748B; text-transform:uppercase;
+                        letter-spacing:0.08em; font-weight:600;
+                        font-family:'Nunito Sans', sans-serif;">Score Reliability</span>
+            <span style="font-size:11px; color:#94A3B8;">
+                {stats['total']} fields total{corrections_html}
+            </span>
         </div>
-
-        <div style="display:flex; height:8px; border-radius:4px; overflow:hidden;
-                    margin:12px 0 10px 0; background:#E2E8F0;">
-            <div style="width:{verified_bar}%; background:#1A7A45;"
-                 title="Verified: {verified_pct}%"></div>
-            <div style="width:{highconf_bar}%; background:#0E7C86;"
-                 title="High Confidence: {high_pct}%"></div>
-            <div style="width:{pending_bar}%; background:#E68A00;"
-                 title="Pending: {pending_pct}%"></div>
-        </div>
-
-        <div style="display:flex; justify-content:space-around; text-align:center;">
-            <div>
-                <div style="font-size:20px; font-weight:700; color:#1A7A45;">{verified_pct}%</div>
-                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
-                            letter-spacing:0.06em;">Verified</div>
-            </div>
-            <div>
-                <div style="font-size:20px; font-weight:700; color:#0E7C86;">{high_pct}%</div>
-                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
-                            letter-spacing:0.06em;">High Conf &#8805;85%</div>
-            </div>
-            <div>
-                <div style="font-size:20px; font-weight:700; color:#E68A00;">{pending_pct}%</div>
-                <div style="font-size:11px; color:#64748B; text-transform:uppercase;
-                            letter-spacing:0.06em;">Pending</div>
-            </div>
-            {corrections_col}
-        </div>
+        {bar_rows}
     </div>
     """
 

@@ -6,7 +6,6 @@ vector, but this Python code calculates the actual score. This is the
 "Safety Valve" ensuring no hallucinated scores.
 """
 
-import numpy as np
 
 
 def calculate_pcs(protocol_data, weights):

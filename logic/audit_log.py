@@ -157,6 +157,79 @@ def record_confirmation(
     return state_dict
 
 
+def record_row_confirmation(
+    state_dict: dict,
+    field_name: str,
+    user_id: str = "reviewer",
+) -> dict:
+    """
+    Per-row Approve Update handler (V2.1 round 3).
+
+    Flips the given field's status to "confirmed" regardless of whether
+    it was previously "pending" or "corrected" — the reviewer has now
+    explicitly signed off on the current value either way. Appends an
+    audit entry.
+    """
+    if not state_dict or field_name not in state_dict.get("field_status", {}):
+        return state_dict
+
+    current = state_dict["current_values"].get(field_name)
+    confidence = state_dict["confidence_scores"].get(field_name, 0.0)
+
+    state_dict["field_status"][field_name] = "confirmed"
+
+    entry = _make_audit_entry(
+        field_name=field_name,
+        original_value=current,
+        corrected_value=current,
+        action="confirmed",
+        confidence_before=confidence,
+        user_id=user_id,
+    )
+    state_dict["audit_entries"].append(entry)
+
+    return state_dict
+
+
+def record_row_unconfirmation(
+    state_dict: dict,
+    field_name: str,
+    user_id: str = "reviewer",
+) -> dict:
+    """
+    Per-row revert handler (V2.1 round 4 — checkbox toggle off).
+
+    When the reviewer un-ticks the Action checkbox on a previously
+    confirmed row, flip the field status back to "pending" and append
+    an audit entry so the trail records the reversal. If the field was
+    edited (status "corrected") before being confirmed, we restore the
+    "corrected" distinction so apply_all_verified_values still writes
+    back the user's edit when the row is re-approved.
+    """
+    if not state_dict or field_name not in state_dict.get("field_status", {}):
+        return state_dict
+
+    current = state_dict["current_values"].get(field_name)
+    original = state_dict["original_values"].get(field_name)
+    confidence = state_dict["confidence_scores"].get(field_name, 0.0)
+
+    # If the row was previously edited, restore "corrected"; otherwise plain pending.
+    next_status = "corrected" if current != original else "pending"
+    state_dict["field_status"][field_name] = next_status
+
+    entry = _make_audit_entry(
+        field_name=field_name,
+        original_value=current,
+        corrected_value=current,
+        action="unconfirmed",
+        confidence_before=confidence,
+        user_id=user_id,
+    )
+    state_dict["audit_entries"].append(entry)
+
+    return state_dict
+
+
 def bulk_approve_high_confidence(
     state_dict: dict,
     threshold: float = 0.85,
@@ -164,6 +237,11 @@ def bulk_approve_high_confidence(
 ) -> dict:
     """
     Bulk-approve all pending fields with confidence >= threshold.
+
+    NOTE (V2.1 round 3): no longer wired to the UI. The Bulk Approve button
+    was removed in favour of per-row Approve Update. This function is
+    preserved as an unwired library primitive — useful for tests and any
+    future demo-mode auto-approve flow.
 
     Creates an audit entry for each approved field.
 
@@ -213,11 +291,14 @@ def get_review_gate_status(state_dict: dict) -> tuple[bool, str]:
     if state_dict is None:
         return False, "No verification state available. Analyze a protocol first."
 
+    # V2.1 round 3: both "pending" AND "corrected" block the gate. An edit
+    # reverts a confirmed row to "corrected" — the reviewer must explicitly
+    # re-approve it via the per-row Action column before scoring proceeds.
     blocking_fields = []
     for field_name, confidence in state_dict.get("confidence_scores", {}).items():
         if confidence < 0.80:
             status = state_dict.get("field_status", {}).get(field_name, "pending")
-            if status == "pending":
+            if status in ("pending", "corrected"):
                 blocking_fields.append(field_name)
 
     if blocking_fields:
@@ -241,13 +322,15 @@ def get_verification_stats(state_dict: dict) -> dict:
     Returns:
         Dict with keys: total, high_confidence, human_verified,
         pending, corrections_count, confirmations_count,
-        high_confidence_pct, verified_pct, pending_pct.
+        high_confidence_pct, verified_pct, pending_pct,
+        mean_confidence_pct.
     """
     if not state_dict:
         return {
             "total": 0, "high_confidence": 0, "human_verified": 0,
             "pending": 0, "corrections_count": 0, "confirmations_count": 0,
             "high_confidence_pct": 0, "verified_pct": 0, "pending_pct": 0,
+            "mean_confidence_pct": 0,
         }
 
     statuses = state_dict.get("field_status", {})
@@ -259,14 +342,18 @@ def get_verification_stats(state_dict: dict) -> dict:
             "total": 0, "high_confidence": 0, "human_verified": 0,
             "pending": 0, "corrections_count": 0, "confirmations_count": 0,
             "high_confidence_pct": 0, "verified_pct": 0, "pending_pct": 0,
+            "mean_confidence_pct": 0,
         }
 
     high_confidence = sum(1 for c in confidences.values() if c >= 0.85)
+    # V2.1 round 3: "corrected" rows count as pending for the dashboard,
+    # mirroring the review-gate semantics. Only explicit confirmations
+    # ("confirmed" / "bulk_approved") count as human-verified.
     human_verified = sum(
         1 for s in statuses.values()
-        if s in ("confirmed", "corrected", "bulk_approved")
+        if s in ("confirmed", "bulk_approved")
     )
-    pending = sum(1 for s in statuses.values() if s == "pending")
+    pending = sum(1 for s in statuses.values() if s in ("pending", "corrected"))
 
     corrections_count = sum(
         1 for e in state_dict.get("audit_entries", [])
@@ -287,6 +374,9 @@ def get_verification_stats(state_dict: dict) -> dict:
         "high_confidence_pct": round(100 * high_confidence / total),
         "verified_pct": round(100 * human_verified / total),
         "pending_pct": round(100 * pending / total),
+        "mean_confidence_pct": round(
+            100 * sum(confidences.values()) / total
+        ) if confidences else 0,
     }
 
 
