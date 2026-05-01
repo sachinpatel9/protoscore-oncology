@@ -57,7 +57,7 @@ from ui.verification import (
 )
 from logic.audit_log import (
     init_verification_state, record_correction,
-    record_row_confirmation, get_review_gate_status,
+    record_row_confirmation, record_row_unconfirmation, get_review_gate_status,
     export_audit_log_json,
 )
 from ui.progress import build_progress_html
@@ -349,17 +349,17 @@ def on_batch_row_select(
     sort_label,
 ):
     """
-    Dispatcher for clicks on the batch verification dataframe (V2.1 r3).
+    Click handler for the batch verification dataframe.
 
     Returns a 6-tuple matching the output bindings:
         (verification_df, verification_state, confidence_dashboard,
          review_gate, inline_evidence_html, evidence_thumbnail)
 
-    - Click on the Action column (col_idx == ACTION_COL_INDEX) routes to
-      `on_approve_row`, which flips that row's status to "confirmed" and
-      re-renders the dataframe + dashboards.
-    - Click anywhere else falls through to the existing inline-evidence
-      panel (UX-2.2).
+    Per V2.1 round 4: the Action column is now a `bool` checkbox toggled
+    via `verification_df.change` (which is gated by `interactive=True`).
+    This handler no longer dispatches by column — every click falls through
+    to the existing inline-evidence panel (UX-2.2). Approval is wired through
+    `on_batch_df_change` which detects the checkbox state transition.
     """
     no_op_df = gr.update()
     no_op_state = gr.update()
@@ -384,9 +384,9 @@ def on_batch_row_select(
         return (no_op_df, no_op_state, no_op_dash, no_op_gate,
                 empty_evidence, None)
 
-    # --- Action column branch: per-row approval ---
-    if col_idx == ACTION_COL_INDEX:
-        return on_approve_row(row_idx, result_state, verif_state, sort_label)
+    # Action column clicks are handled by `on_batch_df_change` via the
+    # checkbox toggle (interactive-gated). This handler only renders evidence.
+    _ = col_idx  # acknowledged-but-unused; kept for future column-aware UX.
 
     # --- Default branch: inline evidence panel ---
     metric_name = _resolve_metric_name(result_state, verif_state, row_idx, sort_label)
@@ -450,8 +450,20 @@ def on_approve_row(row_idx, result_state, verif_state, sort_label):
 
 def on_batch_df_change(df, verif_state, result_state):
     """
-    When user edits a cell in the batch verification DataFrame,
-    detect changes and record corrections in the audit log (FR-4.4).
+    Handle dataframe-edit events on the batch verification table.
+
+    This handler is wired to `verification_df.change`, which only fires
+    when `interactive=True` — meaning every state transition below is
+    gated behind the Edit Report toggle.
+
+    Two kinds of edits are detected per row:
+    1. **Action checkbox toggle** (V2.1 round 4) — when the bool Action
+       cell flips:
+         - False → True on a pending/corrected row → record_row_confirmation
+         - True → False on a confirmed row → record_row_unconfirmation
+    2. **Extracted Value edit** (FR-4.4) — when an editable field's
+       value changes, record_correction; this also forces the Action
+       checkbox back to False since the row needs re-approval.
 
     Returns: (updated_df, updated_verif_state, dashboard_html, gate_html)
     """
@@ -460,7 +472,6 @@ def on_batch_df_change(df, verif_state, result_state):
 
     metric_order = get_metric_name_order(result_state)
 
-    # Iterate rows and detect value changes
     for idx, row in df.iterrows():
         if idx >= len(metric_order):
             continue
@@ -469,24 +480,42 @@ def on_batch_df_change(df, verif_state, result_state):
         new_val_str = str(row.get("Extracted Value", ""))
         original_val = verif_state["original_values"].get(metric_name)
         current_val = verif_state["current_values"].get(metric_name)
+        prior_status = verif_state["field_status"].get(metric_name, "pending")
 
-        # Only track changes for editable fields
-        if metric_name not in EDITABLE_FIELDS:
-            # Revert non-editable fields to original value
+        # --- Detect Action checkbox state transition --------------------
+        # The cell may be bool (gradio normalised) or a stringified bool
+        # depending on Gradio's serialisation; coerce defensively.
+        new_action = row.get("Action", False)
+        if isinstance(new_action, str):
+            new_action = new_action.strip().lower() in ("true", "1", "yes")
+        new_action = bool(new_action)
+        was_confirmed = prior_status in ("confirmed", "bulk_approved")
+
+        value_changed_this_row = False
+
+        # --- Extracted Value edit (only for editable fields) ------------
+        if metric_name in EDITABLE_FIELDS:
+            if new_val_str != str(current_val):
+                verif_state = record_correction(verif_state, metric_name, new_val_str)
+                value_changed_this_row = True
+                # Force checkbox back to False — value changed, row must
+                # be re-approved. Update the displayed Status too.
+                df.at[idx, "Status"] = "Pending"
+                df.at[idx, "Action"] = False
+        else:
+            # Revert non-editable cell edits to the original value.
             if str(original_val) != new_val_str:
                 df.at[idx, "Extracted Value"] = str(original_val)
-            continue
 
-        # Check if value changed from current tracked value
-        if new_val_str != str(current_val):
-            verif_state = record_correction(verif_state, metric_name, new_val_str)
-            # V2.1 round 3: edit reverts row to displayed Pending and the
-            # Action column re-arms the per-row Approve Update trigger.
-            df.at[idx, "Status"] = "Pending"
-            if "Action" in df.columns:
-                df.at[idx, "Action"] = "✓ Approve Update"
+        # --- Action toggle (only if value didn't just change) -----------
+        if not value_changed_this_row:
+            if new_action and not was_confirmed:
+                verif_state = record_row_confirmation(verif_state, metric_name)
+                df.at[idx, "Status"] = "Confirmed"
+            elif (not new_action) and was_confirmed:
+                verif_state = record_row_unconfirmation(verif_state, metric_name)
+                df.at[idx, "Status"] = "Pending"
 
-    # Rebuild dashboard and gate
     dashboard_html = build_confidence_dashboard_html(verif_state)
     gate_html = build_review_gate_html(verif_state)
 
@@ -1209,7 +1238,7 @@ def build_app():
                             "Source Quote", "Page",
                             "Priority", "Confidence", "Status", "Action",
                         ],
-                        datatype=["str", "str", "str", "number", "str", "number", "str", "str"],
+                        datatype=["str", "str", "str", "number", "str", "number", "str", "bool"],
                         interactive=False,
                         wrap=True,
                         row_count=1,

@@ -191,6 +191,45 @@ def record_row_confirmation(
     return state_dict
 
 
+def record_row_unconfirmation(
+    state_dict: dict,
+    field_name: str,
+    user_id: str = "reviewer",
+) -> dict:
+    """
+    Per-row revert handler (V2.1 round 4 — checkbox toggle off).
+
+    When the reviewer un-ticks the Action checkbox on a previously
+    confirmed row, flip the field status back to "pending" and append
+    an audit entry so the trail records the reversal. If the field was
+    edited (status "corrected") before being confirmed, we restore the
+    "corrected" distinction so apply_all_verified_values still writes
+    back the user's edit when the row is re-approved.
+    """
+    if not state_dict or field_name not in state_dict.get("field_status", {}):
+        return state_dict
+
+    current = state_dict["current_values"].get(field_name)
+    original = state_dict["original_values"].get(field_name)
+    confidence = state_dict["confidence_scores"].get(field_name, 0.0)
+
+    # If the row was previously edited, restore "corrected"; otherwise plain pending.
+    next_status = "corrected" if current != original else "pending"
+    state_dict["field_status"][field_name] = next_status
+
+    entry = _make_audit_entry(
+        field_name=field_name,
+        original_value=current,
+        corrected_value=current,
+        action="unconfirmed",
+        confidence_before=confidence,
+        user_id=user_id,
+    )
+    state_dict["audit_entries"].append(entry)
+
+    return state_dict
+
+
 def bulk_approve_high_confidence(
     state_dict: dict,
     threshold: float = 0.85,

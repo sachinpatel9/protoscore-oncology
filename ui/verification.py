@@ -80,11 +80,16 @@ def build_verification_dataframe(
     Columns: Field Name | Extracted Value | Source Quote | Page |
              Priority | Confidence | Status | Action
 
-    Per V2.1 round 3: the Action column renders a per-row clickable trigger
-    cell. Pending or corrected rows show "✓ Approve Update"; confirmed or
-    bulk_approved rows show "✓ Confirmed". The Status column maps both
-    "pending" and "corrected" to the displayed label "Pending" so an edit
-    visibly reverts a previously confirmed row.
+    Per V2.1 round 4: the Action column is a real boolean checkbox
+    (Gradio `bool` datatype). Confirmed/bulk_approved rows render as
+    True (checked); pending/corrected rows render as False (unchecked).
+    Toggling the checkbox fires `verification_df.change`, which only
+    fires when `interactive=True` — so the per-row approve action is
+    naturally gated behind the Edit Report toggle alongside cell edits.
+
+    The Status column maps both "pending" and "corrected" to the
+    displayed label "Pending" so an edit visibly reverts a previously
+    confirmed row.
 
     Default sort is "priority" — High → Medium → Low — so the most
     uncertain fields surface at the top. Other sort keys are exposed
@@ -127,11 +132,9 @@ def build_verification_dataframe(
             "bulk_approved": "Confirmed",
         }.get(raw_status, "Pending")
 
-        # Action column: clickable trigger for per-row approval (V2.1 r3).
-        if raw_status in ("confirmed", "bulk_approved"):
-            action = "✓ Confirmed"
-        else:
-            action = "✓ Approve Update"
+        # Action column: bool checkbox for per-row approval (V2.1 r4).
+        # True = confirmed/bulk_approved; False = pending/corrected.
+        action = raw_status in ("confirmed", "bulk_approved")
 
         rows.append({
             "Field Name": record.display_label,

@@ -19,6 +19,7 @@ from logic.audit_log import (
     init_verification_state,
     record_correction,
     record_row_confirmation,
+    record_row_unconfirmation,
     get_review_gate_status,
 )
 
@@ -98,9 +99,162 @@ def test_action_column_present(valid_feature_vector):
     df = build_verification_dataframe(valid_feature_vector)
     assert len(df.columns) == 8
     assert list(df.columns)[-1] == "Action"
-    # All initial rows are pending → "✓ Approve Update"
+
+
+def test_action_column_is_bool(valid_feature_vector):
+    """V2.1 r4: the Action column is a boolean checkbox, not a text trigger."""
+    df = build_verification_dataframe(valid_feature_vector)
     for cell in df["Action"]:
-        assert cell in ("✓ Approve Update", "✓ Confirmed")
+        assert isinstance(cell, bool), f"Action cell {cell!r} is not bool"
+
+
+def test_action_column_initial_state_all_unchecked(valid_feature_vector):
+    """All rows start as Pending → Action checkbox unchecked."""
+    state = init_verification_state(valid_feature_vector.provenance)
+    df = build_verification_dataframe(valid_feature_vector, state)
+    assert (df["Action"] == False).all()  # noqa: E712 — pandas bool comparison
+
+
+def test_action_column_true_after_confirmation(valid_feature_vector):
+    """After record_row_confirmation, the field's Action cell renders True."""
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_row_confirmation(state, "ie_criteria_count")
+    df = build_verification_dataframe(valid_feature_vector, state)
+    # Find the row for ie_criteria_count via metric ordering
+    from ui.verification import get_metric_name_order
+    order = get_metric_name_order(valid_feature_vector)
+    idx = order.index("ie_criteria_count")
+    assert df.iloc[idx]["Action"] is True or df.iloc[idx]["Action"] == True  # noqa: E712
+
+
+def test_action_column_false_for_corrected_status(valid_feature_vector):
+    """Corrected status → Action checkbox unchecked (row needs re-approval)."""
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_correction(state, "ie_criteria_count", "42")
+    df = build_verification_dataframe(valid_feature_vector, state)
+    from ui.verification import get_metric_name_order
+    order = get_metric_name_order(valid_feature_vector)
+    idx = order.index("ie_criteria_count")
+    assert df.iloc[idx]["Action"] is False or df.iloc[idx]["Action"] == False  # noqa: E712
+
+
+def test_record_row_unconfirmation_pending_path(valid_feature_vector):
+    """Untoggling a confirmed row that was never edited → status 'pending'."""
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_row_confirmation(state, "ie_criteria_count")
+    assert state["field_status"]["ie_criteria_count"] == "confirmed"
+
+    state = record_row_unconfirmation(state, "ie_criteria_count")
+    assert state["field_status"]["ie_criteria_count"] == "pending"
+    actions = [e["action"] for e in state["audit_entries"]]
+    assert "unconfirmed" in actions
+
+
+def test_record_row_unconfirmation_corrected_path(valid_feature_vector):
+    """Untoggling a confirmed row that WAS edited → status restored to 'corrected'."""
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_correction(state, "ie_criteria_count", "42")
+    state = record_row_confirmation(state, "ie_criteria_count")
+    assert state["field_status"]["ie_criteria_count"] == "confirmed"
+
+    state = record_row_unconfirmation(state, "ie_criteria_count")
+    # Edit must survive un-approval so apply_all_verified_values still
+    # writes the user's value back when the row is re-approved later.
+    assert state["field_status"]["ie_criteria_count"] == "corrected"
+    assert state["current_values"]["ie_criteria_count"] == "42"
+
+
+def test_on_batch_df_change_action_toggle_confirms_row(valid_feature_vector):
+    """Toggling the Action checkbox True on a pending row records confirmation."""
+    from app import on_batch_df_change
+
+    state = init_verification_state(valid_feature_vector.provenance)
+    df = build_verification_dataframe(valid_feature_vector, state)
+    from ui.verification import get_metric_name_order
+    order = get_metric_name_order(valid_feature_vector)
+    idx = order.index("ie_criteria_count")
+
+    # Simulate the user ticking the checkbox in the dataframe edit surface.
+    df.at[idx, "Action"] = True
+    new_df, new_state, _, _ = on_batch_df_change(df, state, valid_feature_vector)
+
+    assert new_state["field_status"]["ie_criteria_count"] == "confirmed"
+    assert new_df.iloc[idx]["Status"] == "Confirmed"
+
+
+def test_on_batch_df_change_action_toggle_unconfirms_row(valid_feature_vector):
+    """Toggling the Action checkbox False on a confirmed row reverts status."""
+    from app import on_batch_df_change
+
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_row_confirmation(state, "ie_criteria_count")
+    df = build_verification_dataframe(valid_feature_vector, state)
+    from ui.verification import get_metric_name_order
+    order = get_metric_name_order(valid_feature_vector)
+    idx = order.index("ie_criteria_count")
+
+    df.at[idx, "Action"] = False
+    new_df, new_state, _, _ = on_batch_df_change(df, state, valid_feature_vector)
+    assert new_state["field_status"]["ie_criteria_count"] in ("pending", "corrected")
+    assert new_df.iloc[idx]["Status"] == "Pending"
+
+
+def test_on_batch_df_change_value_edit_unchecks_action(valid_feature_vector):
+    """Editing the Extracted Value forces the Action checkbox to False."""
+    from app import on_batch_df_change
+
+    state = init_verification_state(valid_feature_vector.provenance)
+    state = record_row_confirmation(state, "ie_criteria_count")
+    df = build_verification_dataframe(valid_feature_vector, state)
+    from ui.verification import get_metric_name_order
+    order = get_metric_name_order(valid_feature_vector)
+    idx = order.index("ie_criteria_count")
+
+    # Action starts True (confirmed). User edits the value WITHOUT
+    # touching the checkbox. The handler must:
+    #   1) flip the audit-log status to "corrected"
+    #   2) force Action False since the row needs re-approval.
+    df.at[idx, "Extracted Value"] = "999"
+    new_df, new_state, _, _ = on_batch_df_change(df, state, valid_feature_vector)
+
+    assert new_state["field_status"]["ie_criteria_count"] == "corrected"
+    assert new_df.iloc[idx]["Action"] is False or new_df.iloc[idx]["Action"] == False  # noqa: E712
+    assert new_df.iloc[idx]["Status"] == "Pending"
+
+
+def test_select_handler_does_not_route_action_column(valid_feature_vector):
+    """
+    V2.1 r4: clicks on the Action column no longer trigger approval via
+    `verification_df.select`. Approval is exclusively driven by the
+    `verification_df.change` event (interactive-gated). This test asserts
+    the dispatcher returns no-op state for an Action-column select.
+    """
+    from app import on_batch_row_select, ACTION_COL_INDEX
+
+    state = init_verification_state(valid_feature_vector.provenance)
+
+    class _Evt:
+        index = (0, ACTION_COL_INDEX)
+
+    # Simulate a click on the Action column when interactive=False.
+    # The handler must NOT mutate state (no record_row_confirmation call).
+    out = on_batch_row_select(_Evt(), valid_feature_vector, None, state, "Priority (High → Low)")
+    # 6-tuple: (df, state, dashboard, gate, evidence, thumb)
+    assert len(out) == 6
+    # State returned is either gr.update() (no-op) or the same dict —
+    # never a state with the field flipped to confirmed.
+    assert state["field_status"]["ie_criteria_count"] == "pending"
+
+
+def test_on_toggle_edit_mode_flips_interactive_state():
+    """on_toggle_edit_mode must flip the boolean state and update button label."""
+    from app import on_toggle_edit_mode
+    # False → True
+    df_update, new_state, btn_update = on_toggle_edit_mode(False)
+    assert new_state is True
+    # True → False
+    df_update2, new_state2, _ = on_toggle_edit_mode(True)
+    assert new_state2 is False
 
 
 def test_record_row_confirmation_flips_status(valid_feature_vector):
@@ -135,7 +289,7 @@ def test_edit_after_confirm_reverts_to_pending_label(invalid_feature_vector):
     for _, row in df.iterrows():
         if "I/E" in row["Field Name"] or "Inclusion" in row["Field Name"] or row["Extracted Value"] == "42":
             assert row["Status"] == "Pending"
-            assert row["Action"] == "✓ Approve Update"
+            assert row["Action"] is False or row["Action"] == False  # noqa: E712 — bool checkbox unchecked
             break
     else:
         pytest.fail("Could not locate ie_criteria_count row in dataframe")
