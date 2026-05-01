@@ -39,22 +39,58 @@ EDITABLE_FIELDS = {
 # Batch Review DataFrame Builder (UX-2.1)
 # ---------------------------------------------------------------------------
 
+# Confidence-based review priority (V2.2 batch verification revamp).
+# Thresholds: High < 0.70, Medium [0.70, 0.85), Low >= 0.85.
+PRIORITY_RANK = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def _priority_for(confidence: float) -> tuple[str, str]:
+    """Return (label, hex_color) for confidence-based review priority."""
+    if confidence < 0.70:
+        return ("High", "#C0392B")  # red
+    if confidence < 0.85:
+        return ("Medium", "#E68A00")  # amber
+    return ("Low", "#1A7A45")  # green
+
+
+def _priority_label_with_dot(confidence: float) -> str:
+    """Unicode-dot prefixed label for the gr.Dataframe Priority cell."""
+    label, _ = _priority_for(confidence)
+    dot = {"High": "\U0001F534", "Medium": "\U0001F7E1", "Low": "\U0001F7E2"}[label]
+    return f"{dot} {label}"
+
+
+def _strip_priority_dot(cell: str) -> str:
+    """Reverse of _priority_label_with_dot — extract bare High/Medium/Low."""
+    if not isinstance(cell, str):
+        return str(cell)
+    for key in PRIORITY_RANK:
+        if key in cell:
+            return key
+    return cell
+
+
 def build_verification_dataframe(
     result: ExtractionResult,
     verif_state: dict | None = None,
+    sort_by: str = "priority",
 ) -> pd.DataFrame:
     """
     Build the batch review DataFrame from extraction provenance.
 
     Columns: Field Name | Extracted Value | Source Quote | Page |
-             Confidence | Status
+             Priority | Confidence | Status
 
-    Rows are sorted: needs-review (< 0.80) first, then by confidence
-    ascending, so the most uncertain fields appear at the top.
+    Default sort is "priority" — High → Medium → Low — so the most
+    uncertain fields surface at the top. Other sort keys are exposed
+    via the Sort dropdown above the dataframe in the Batch Verification
+    tab.
 
     Args:
         result: ExtractionResult from the AI pipeline
         verif_state: Optional verification state dict for status column
+        sort_by: One of "priority", "confidence_asc", "confidence_desc",
+                 "status", "field_name".
 
     Returns:
         pandas DataFrame for gr.Dataframe display.
@@ -89,6 +125,7 @@ def build_verification_dataframe(
             "Extracted Value": str(record.value),
             "Source Quote": quote,
             "Page": page,
+            "Priority": _priority_label_with_dot(record.confidence_score),
             "Confidence": round(record.confidence_score, 2),
             "Status": status,
         })
@@ -97,15 +134,52 @@ def build_verification_dataframe(
     if df.empty:
         return df
 
-    # Sort: needs review first (confidence < 0.80), then ascending confidence
-    df["_sort_key"] = df["Confidence"].apply(lambda c: 0 if c < 0.80 else 1)
-    df = df.sort_values(["_sort_key", "Confidence"]).drop(columns=["_sort_key"])
+    df = _sort_verification_df(df, sort_by)
     df = df.reset_index(drop=True)
-
     return df
 
 
-def get_metric_name_order(result: ExtractionResult) -> list[str]:
+def _sort_verification_df(df: pd.DataFrame, sort_by: str) -> pd.DataFrame:
+    """Apply a sort_by key to the verification dataframe."""
+    if df.empty:
+        return df
+
+    key = (sort_by or "priority").lower()
+    if key == "priority":
+        df = df.assign(
+            _prio=df["Priority"].map(lambda c: PRIORITY_RANK.get(_strip_priority_dot(c), 99))
+        )
+        df = df.sort_values(["_prio", "Confidence"]).drop(columns=["_prio"])
+    elif key in ("confidence_asc", "confidence (low → high)"):
+        df = df.sort_values("Confidence", ascending=True)
+    elif key in ("confidence_desc", "confidence (high → low)"):
+        df = df.sort_values("Confidence", ascending=False)
+    elif key == "status":
+        df = df.sort_values("Status")
+    elif key in ("field_name", "field name (a → z)"):
+        df = df.sort_values("Field Name")
+    else:
+        df = df.assign(
+            _prio=df["Priority"].map(lambda c: PRIORITY_RANK.get(_strip_priority_dot(c), 99))
+        )
+        df = df.sort_values(["_prio", "Confidence"]).drop(columns=["_prio"])
+    return df
+
+
+# Map dropdown labels → sort_by keys understood by build_verification_dataframe.
+SORT_LABEL_TO_KEY = {
+    "Priority (High → Low)": "priority",
+    "Confidence (Low → High)": "confidence_asc",
+    "Confidence (High → Low)": "confidence_desc",
+    "Status": "status",
+    "Field Name (A → Z)": "field_name",
+}
+
+
+def get_metric_name_order(
+    result: ExtractionResult,
+    sort_by: str = "priority",
+) -> list[str]:
     """
     Return ordered list of metric names matching DataFrame row order.
 
@@ -115,10 +189,20 @@ def get_metric_name_order(result: ExtractionResult) -> list[str]:
     for metric_name, record in result.provenance.items():
         if metric_name.startswith("amendment_finding_"):
             continue
-        entries.append((metric_name, record.confidence_score))
+        label, _ = _priority_for(record.confidence_score)
+        entries.append((metric_name, record.confidence_score, label, record.display_label))
 
-    # Same sort as build_verification_dataframe
-    entries.sort(key=lambda e: (0 if e[1] < 0.80 else 1, e[1]))
+    key = (sort_by or "priority").lower()
+    if key == "priority":
+        entries.sort(key=lambda e: (PRIORITY_RANK.get(e[2], 99), e[1]))
+    elif key in ("confidence_asc", "confidence (low → high)"):
+        entries.sort(key=lambda e: e[1])
+    elif key in ("confidence_desc", "confidence (high → low)"):
+        entries.sort(key=lambda e: -e[1])
+    elif key in ("field_name", "field name (a → z)"):
+        entries.sort(key=lambda e: e[3])
+    else:
+        entries.sort(key=lambda e: (PRIORITY_RANK.get(e[2], 99), e[1]))
     return [e[0] for e in entries]
 
 

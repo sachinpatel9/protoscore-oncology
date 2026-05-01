@@ -226,10 +226,26 @@ CUSTOM_CSS = """
         color: white !important;
         width: 100% !important;
     }
-    .confirm-field-btn button {
+    .edit-report-btn button {
         border: 1px solid #0E7C86 !important;
         color: #0E7C86 !important;
         background: transparent !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+    }
+    /* V2.2 verification card frame */
+    .verification-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+        padding: 8px !important;
+    }
+    /* Priority cell tinting (5th column = Priority).
+       Belt-and-suspenders: per-cell color via class + dot prefix. */
+    .verification-card td:nth-child(5) {
+        font-weight: 700 !important;
     }
     .export-audit-btn button {
         background: transparent !important;

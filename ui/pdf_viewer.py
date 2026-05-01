@@ -219,25 +219,3 @@ def build_provenance_panel(record: ProvenanceRecord) -> str:
     return html
 
 
-def build_pdf_placeholder_html() -> str:
-    """Build a centred placeholder shown while extraction is running."""
-    # Simple document icon as inline SVG
-    doc_icon = (
-        '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" '
-        'xmlns="http://www.w3.org/2000/svg">'
-        '<path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 '
-        '20 21.1 20 20V8L14 2Z" fill="#CBD5E1"/>'
-        '<path d="M14 2V8H20" fill="#94A3B8"/>'
-        '<path d="M14 2V8H20" stroke="#94A3B8" stroke-width="0.5"/>'
-        '</svg>'
-    )
-    return f"""
-    <div style="display:flex; flex-direction:column; align-items:center;
-                justify-content:center; min-height:400px; padding:40px 20px;">
-        <div style="margin-bottom:16px;">{doc_icon}</div>
-        <div style="font-size:13px; color:#94A3B8; text-align:center;
-                    font-family:'Nunito Sans', sans-serif;">
-            PDF viewer will load once analysis is complete
-        </div>
-    </div>
-    """
